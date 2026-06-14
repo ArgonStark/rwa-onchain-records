@@ -35,9 +35,9 @@ export async function fetchXauSpot(): Promise<number> {
 }
 
 export interface JupiterPrice {
-  /** xStock token price in USD (on-chain DEX-derived). */
+  /** xStock token price in USD — on-chain DEX-derived (Jupiter routing). */
   tokenUsd: number;
-  /** Underlying equity price in USD, if Jupiter carries stockData. */
+  /** Underlying equity price in USD (real off-chain share price; see audit). */
   underlyingUsd: number | null;
 }
 
@@ -48,8 +48,17 @@ interface JupV3Entry {
 
 /**
  * Jupiter price v3 (lite endpoint). Returns mint -> { tokenUsd, underlyingUsd }.
- * v3 conveniently carries `stockData.price` (the real share price) for xStocks,
- * so we get both the token and its underlying from one call.
+ *
+ * AUDIT (2026-06-14): confirmed `usdPrice` and `stockData.price` are INDEPENDENT
+ * sources, so the premium (tokenUsd / underlyingUsd - 1) is NOT circular:
+ *  - `usdPrice` is the on-chain DEX price of the xStock token (tiny ~$1.8M pool).
+ *  - `stockData` is a real off-chain equity feed: it carries the true company
+ *    market cap (TSLA ~$1.5T, NVDA ~$5T) which cannot come from on-chain token
+ *    data, and `stockData.price` matched independent Yahoo quotes within ~0.1%
+ *    (TSLA 406.1 vs 406.4, NVDA 205.4 vs 205.2, AAPL 291.5 vs 291.1).
+ * So premium = on-chain token price vs real underlying share price — the genuine
+ * tokenization premium/discount. A dedicated equities API (Finnhub/Polygon, key
+ * server-side) could be swapped in as an independent cross-check later.
  */
 export async function fetchJupiterPrices(
   mints: string[],

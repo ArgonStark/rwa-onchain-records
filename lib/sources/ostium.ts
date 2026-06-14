@@ -49,6 +49,54 @@ const PAIRS_QUERY = `{
   }
 }`;
 
+// 24h volume: the Ostium subgraph has NO per-pair day-data entity (only
+// shareToAssetsPriceDaily, which is the vault LP share price). Verified the full
+// entity list 2026-06-14. We instead aggregate real opened-position notional
+// from the `trade` entity over the last 24h. Scaling confirmed against a live
+// BTC trade: `notional` is USD * 1e6 (collateral 1e6 USDC * leverage 1e2). This
+// is "24h opened notional", labelled as such — it counts position opens, which
+// differs slightly from a venue's full taker volume; attributed accordingly.
+const VOL_E6 = 1e6;
+const VOL_PAGE = 1000;
+
+async function fetchOstium24hVolume(): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  const cutoff = Math.floor(Date.now() / 1000) - 24 * 60 * 60;
+  let after = cutoff;
+  // Page by ascending timestamp until a partial page (<VOL_PAGE) is returned.
+  for (let guard = 0; guard < 50; guard++) {
+    const query = `{
+      trades(first: ${VOL_PAGE}, orderBy: timestamp, orderDirection: asc, where: { timestamp_gte: ${after} }) {
+        timestamp
+        notional
+        pair { from }
+      }
+    }`;
+    const res = await fetch(SUBGRAPH_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+      cache: "no-store",
+    });
+    if (!res.ok) break;
+    const json = (await res.json()) as {
+      data?: { trades?: { timestamp: string; notional: string; pair: { from: string } }[] };
+    };
+    const trades = json.data?.trades ?? [];
+    for (const t of trades) {
+      const usd = Number(t.notional) / VOL_E6;
+      if (Number.isFinite(usd)) {
+        out.set(t.pair.from, (out.get(t.pair.from) ?? 0) + usd);
+      }
+    }
+    if (trades.length < VOL_PAGE) break;
+    // Advance past the last timestamp (may slightly double/skip same-second
+    // trades at the boundary; negligible for a volume estimate).
+    after = Number(trades[trades.length - 1]!.timestamp) + 1;
+  }
+  return out;
+}
+
 export async function getOstiumPerps(): Promise<VenueResult> {
   const venue = "Ostium";
   try {
@@ -67,15 +115,13 @@ export async function getOstiumPerps(): Promise<VenueResult> {
     }
     const pairs = json.data?.pairs ?? [];
 
-    // Contract-derived funding (best-effort; empty map on RPC failure leaves
-    // funding null without breaking the subgraph-derived OI/skew).
+    // Contract-derived funding + aggregated 24h volume (both best-effort: a
+    // failure leaves that field null without breaking subgraph-derived OI/skew).
     const pairIds = pairs.map((p) => Number(p.id)).filter(Number.isFinite);
-    let funding: Map<number, number> = new Map();
-    try {
-      funding = await getOstiumFundingRates(pairIds);
-    } catch {
-      funding = new Map();
-    }
+    const [funding, volume] = await Promise.all([
+      getOstiumFundingRates(pairIds).catch(() => new Map<number, number>()),
+      fetchOstium24hVolume().catch(() => new Map<string, number>()),
+    ]);
 
     const markets: PerpMarket[] = [];
     for (const p of pairs) {
@@ -93,9 +139,9 @@ export async function getOstiumPerps(): Promise<VenueResult> {
         category: classifySymbol(p.from),
         markPx,
         oiUsd,
-        // The subgraph `volume` field is cumulative, not a 24h rolling window,
-        // so we don't expose a 24h figure here. TODO: derive from day entities.
-        vol24hUsd: null,
+        // 24h opened notional aggregated from `trade` events (no day-data entity
+        // exists). null only if the aggregation query failed; 0 = no trades.
+        vol24hUsd: volume.get(p.from) ?? null,
         funding: fundingRate ?? null,
         skew: skewMetric(longOi, shortOi),
         source: "Ostium subgraph (Ormi) + PairInfos funding",

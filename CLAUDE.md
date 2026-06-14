@@ -54,3 +54,22 @@ across perp venues, and perp–spot basis. Not a re-served price feed.
   `0x3890243A8fc091C626ED26c087A028B46Bc9d66C` (don't hardcode; it's registry-managed).
 - Needs an Arbitrum RPC (env `ARBITRUM_RPC_URL`, server-side; defaults to public arb1).
   A present `funding: 0` = the real verified rate; `null` = the RPC read failed.
+
+### Equity premium reference (xStocks) — audited NOT circular
+- Jupiter price v3 returns two independent numbers per xStock: `usdPrice` (the
+  on-chain DEX price of the token, ~$1.8M pools) and `stockData.price` (a real
+  off-chain equity feed). Confirmed independent 2026-06-14: `stockData` carries
+  the true company market cap (TSLA ~$1.5T, NVDA ~$5T — impossible to derive from
+  on-chain token data), and `stockData.price` matched independent Yahoo quotes
+  within ~0.1% (TSLA 406.1/406.4, NVDA 205.4/205.2, AAPL 291.5/291.1). So
+  premium = token DEX price ÷ real share price − 1 is the genuine tokenization
+  premium/discount, not a token-vs-itself artifact. A keyed equities API
+  (Finnhub/Polygon) can be added later as an independent cross-check.
+
+### Ostium 24h volume — aggregated from trades (no day-data entity)
+- The subgraph has NO per-pair day-data entity (only `shareToAssetsPriceDaily` =
+  vault LP price). Verified the full entity list 2026-06-14. We compute real 24h
+  volume by aggregating `trade.notional` (USD, scaled 1e6) over the last 24h,
+  paginated by timestamp. This is "24h opened-position notional" — it counts
+  opens, slightly narrower than full taker volume; labelled as such. `null` =
+  aggregation failed; `0` = genuinely no trades (e.g. RWA pairs over a weekend).

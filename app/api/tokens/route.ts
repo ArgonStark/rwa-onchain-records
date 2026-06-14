@@ -44,12 +44,13 @@ async function buildTokens(): Promise<TokensResponse> {
       realSpotPrice = xau;
       spotSource = xau !== null ? "gold-api.com (XAU spot)" : null;
     } else if (t.chain === "Solana") {
-      // xStocks: Jupiter v3 gives token price AND underlying share price.
+      // xStocks: Jupiter v3 gives the on-chain DEX token price AND a real
+      // off-chain underlying equity price (audited independent — see prices.ts).
       const jp = jup?.get(t.address) ?? null;
       tokenUsdPrice = jp?.tokenUsd ?? null;
-      priceSource = tokenUsdPrice !== null ? "Jupiter price v3" : null;
+      priceSource = tokenUsdPrice !== null ? "Jupiter v3 (on-chain DEX)" : null;
       realSpotPrice = jp?.underlyingUsd ?? null;
-      spotSource = realSpotPrice !== null ? "Jupiter v3 stockData" : null;
+      spotSource = realSpotPrice !== null ? "xStocks underlying (real equity feed)" : null;
       isEquityOpen = marketOpen;
       if (!marketOpen) {
         note = "US market closed — premium reflects off-hours oracle/last price";
