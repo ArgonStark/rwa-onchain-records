@@ -8,3 +8,6 @@ next-env.d.ts
 .env*.local
 .DS_Store
 npm-debug.log*
+
+# local postgres cluster (Phase 2)
+.pgdata/
