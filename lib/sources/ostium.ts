@@ -1,5 +1,6 @@
 import { classifySymbol } from "../categories";
 import { skew as skewMetric } from "../metrics";
+import { getOstiumFundingRates } from "./ostiumFunding";
 import type { PerpMarket, VenueResult } from "../types";
 
 // Ostium (Arbitrum One) — RWA-perps specialist. Verified live 2026-06-13.
@@ -18,20 +19,18 @@ const SUBGRAPH_URL =
 //    so oiUsd = (longOI + shortOI)/1e18 * price.
 const E18 = 1e18;
 
-// lastFundingRate scale is NOT verified: every pair (incl. 24/7 crypto) read
-// back "0" at integration time, so it can't be confirmed against a live value.
-// We surface it best-effort assuming 1e18 and null out the common 0 case rather
-// than present an unverified non-zero number. TODO: confirm scale once a venue
-// shows a non-zero funding rate (cross-check fundingHistory or the SDK).
-const FUNDING_SCALE = E18;
+// Funding is read from the PairInfos contract (see ./ostiumFunding.ts), not the
+// subgraph: the subgraph's lastFundingRate is 0 because Ostium currently has
+// maxFundingFeePerBlock=0 protocol-wide. Verified across subgraph + contract +
+// the app's own /api/pairs on 2026-06-14.
 
 interface OstiumPair {
+  id: string;
   from: string;
   to: string;
   longOI: string;
   shortOI: string;
   lastTradePrice: string;
-  lastFundingRate: string;
 }
 
 interface SubgraphResponse {
@@ -41,12 +40,12 @@ interface SubgraphResponse {
 
 const PAIRS_QUERY = `{
   pairs(first: 200, orderBy: longOI, orderDirection: desc) {
+    id
     from
     to
     longOI
     shortOI
     lastTradePrice
-    lastFundingRate
   }
 }`;
 
@@ -68,6 +67,16 @@ export async function getOstiumPerps(): Promise<VenueResult> {
     }
     const pairs = json.data?.pairs ?? [];
 
+    // Contract-derived funding (best-effort; empty map on RPC failure leaves
+    // funding null without breaking the subgraph-derived OI/skew).
+    const pairIds = pairs.map((p) => Number(p.id)).filter(Number.isFinite);
+    let funding: Map<number, number> = new Map();
+    try {
+      funding = await getOstiumFundingRates(pairIds);
+    } catch {
+      funding = new Map();
+    }
+
     const markets: PerpMarket[] = [];
     for (const p of pairs) {
       const markPx = Number(p.lastTradePrice) / E18;
@@ -76,11 +85,7 @@ export async function getOstiumPerps(): Promise<VenueResult> {
       if (!Number.isFinite(markPx) || markPx <= 0) continue;
 
       const oiUsd = (longOi + shortOi) * markPx;
-      const rawFunding = Number(p.lastFundingRate);
-      const funding =
-        Number.isFinite(rawFunding) && rawFunding !== 0
-          ? rawFunding / FUNDING_SCALE
-          : null;
+      const fundingRate = funding.get(Number(p.id)); // present 0 = real, verified
 
       markets.push({
         venue,
@@ -91,9 +96,9 @@ export async function getOstiumPerps(): Promise<VenueResult> {
         // The subgraph `volume` field is cumulative, not a 24h rolling window,
         // so we don't expose a 24h figure here. TODO: derive from day entities.
         vol24hUsd: null,
-        funding,
+        funding: fundingRate ?? null,
         skew: skewMetric(longOi, shortOi),
-        source: "Ostium subgraph (Ormi) pairs",
+        source: "Ostium subgraph (Ormi) + PairInfos funding",
       });
     }
     return { venue, status: "ok", markets };
