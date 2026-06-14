@@ -12,6 +12,24 @@ npm run dev                        # http://localhost:3000
 node scripts/snapshot-writer.mjs   # POSTs /api/snapshot every 5 min
 ```
 
+## Phase 3 additions (analytics layer)
+
+- **Daily notional volume** (`daily_volume` table): dYdX `usdVolume` (exact),
+  Ostium trades bucketed by UTC day (exact), HL/HIP-3 1d candle base×close
+  (approx, flagged). Going-forward rollup from `perp_snapshots` each cycle.
+  `POST /api/seed?days=N` backfills. Reproduces the xyz:SPCX $1.37B spike.
+- **Interactive charts** (`lightweight-charts` v5, native panes): crosshair +
+  DIY tooltip time-synced across differently-sampled series, volume histogram
+  overlay, pan/zoom (wheel/drag + pinch/kinetic touch, reduced-motion-safe),
+  live `series.update()` that preserves zoom. `InteractiveChart` is reused by
+  the detail view and aggregates.
+- **Detail view**: click a row → price + daily volume (pane 0) and OI (pane 1)
+  on a shared time axis, 6h/24h/7d/30d toggle.
+- **Aggregates** (`/api/aggregates`, `AggregatePanel`): header strip (RWA vs
+  total OI + 24h notional + DoD), daily notional by class/venue, OI by class.
+  DefiLlama cross-check is unavailable (its derivatives API now returns HTTP
+  402); we rely on each venue's own authoritative daily source.
+
 ## Phase 2 additions
 
 - **Ostium funding** now read from the `PairInfos` contract (viem), not the

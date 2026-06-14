@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { hasDatabase } from "@/lib/db";
 import { seedDailyVolume } from "@/lib/dailyVolume";
+import { backfillSnapshotCategory } from "@/lib/aggregates";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -27,7 +28,9 @@ export async function POST(req: Request) {
   const daysBack = Math.min(60, Math.max(1, Number(url.searchParams.get("days")) || 14));
   try {
     const result = await seedDailyVolume(daysBack);
-    return NextResponse.json({ daysBack, ...result });
+    // backfill category onto historical snapshot rows for OI-by-class history
+    const categorized = await backfillSnapshotCategory();
+    return NextResponse.json({ daysBack, ...result, snapshotRowsCategorized: categorized });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : String(e) },

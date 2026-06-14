@@ -10,6 +10,7 @@ import type {
 } from "@/lib/types";
 import { Sparkline } from "./components/Sparkline";
 import { DetailChart } from "./components/DetailChart";
+import { AggregatePanel } from "./components/AggregatePanel";
 
 const REFRESH_MS = 30_000;
 
@@ -113,6 +114,8 @@ export default function Page() {
       )}
 
       <VenueStrip perps={perps} />
+
+      <AggregatePanel />
 
       <section className="mb-10">
         <SectionTitle

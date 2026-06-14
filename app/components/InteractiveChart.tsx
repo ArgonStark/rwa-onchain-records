@@ -160,6 +160,15 @@ export function InteractiveChart({
     const chart = chartRef.current;
     if (!chart) return;
 
+    // Remove series no longer present (toggles class<->venue, RWA-only filter).
+    const ids = new Set(series.map((s) => s.id));
+    for (const [id, api] of seriesRef.current) {
+      if (!ids.has(id)) {
+        chart.removeSeries(api);
+        seriesRef.current.delete(id);
+      }
+    }
+
     for (const s of series) {
       let api = seriesRef.current.get(s.id);
       if (!api) {
