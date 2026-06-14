@@ -7,6 +7,7 @@ export interface SnapshotResult {
   perpRows: number;
   tokenRows: number;
   dailyRollupRows: number;
+  skipped?: string;
   venues: { venue: string; status: string; count: number }[];
 }
 
@@ -24,6 +25,22 @@ export async function takeSnapshot(): Promise<SnapshotResult> {
     aggregatePerps(),
     aggregateTokens(),
   ]);
+
+  // A snapshot is a coherent cross-venue OI slice. If ANY venue failed, the
+  // totals would be partial and poison the aggregate time-series (a fake dip to
+  // ~0). Skip the whole perp write rather than store a misleading slice — a gap
+  // is honest; a partial total is not.
+  const downVenues = perps.venues.filter((v) => v.status !== "ok" || v.count === 0);
+  if (downVenues.length > 0) {
+    return {
+      ts: ts.toISOString(),
+      perpRows: 0,
+      tokenRows: 0,
+      dailyRollupRows: 0,
+      skipped: `partial capture — venue(s) down: ${downVenues.map((v) => v.venue).join(", ")}`,
+      venues: perps.venues.map((v) => ({ venue: v.venue, status: v.status, count: v.count })),
+    };
+  }
 
   // ── perp_snapshots ────────────────────────────────────────────────
   let perpRows = 0;

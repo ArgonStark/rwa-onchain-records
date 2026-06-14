@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { InteractiveChart, type ChartSeries } from "./InteractiveChart";
+import { compactUsd } from "@/lib/format";
 
 interface DaySeriesPoint {
   day: string;
@@ -45,13 +46,7 @@ const VENUE_COLOR: Record<string, string> = {
 };
 const CLASS_ORDER = ["equity", "commodity", "index", "forex", "crypto"];
 
-const fmtUsd = (n: number): string => {
-  const a = Math.abs(n);
-  if (a >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
-  if (a >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
-  if (a >= 1e3) return `$${(n / 1e3).toFixed(1)}K`;
-  return `$${n.toFixed(0)}`;
-};
+const fmtUsd = compactUsd;
 const fmtPct = (n: number | null): string =>
   n === null ? "—" : `${n >= 0 ? "+" : ""}${(n * 100).toFixed(1)}%`;
 const daySec = (day: string): number => Date.parse(`${day}T00:00:00Z`) / 1000;
@@ -120,6 +115,14 @@ export function AggregatePanel() {
   const h = data?.header;
   const volKeys = mode === "venue" ? Object.keys(VENUE_COLOR) : CLASS_ORDER.filter((k) => !(rwaOnly && k === "crypto"));
 
+  // OI-by-class spans only our recorded snapshots — fit to its real extent and
+  // caption while it's still short. Intraday ticks under ~2 days, else daily.
+  const oi = data?.oiByClass ?? [];
+  const oiExtentSec = oi.length > 1 ? oi[oi.length - 1]!.t - oi[0]!.t : 0;
+  const oiTimeAxis: "intraday" | "daily" = oiExtentSec < 2 * 86400 ? "intraday" : "daily";
+  const oiBuilding = oi.length > 0 && oiExtentSec < 2 * 86400;
+  const volDays = data?.dailyByClass.length ?? 0;
+
   return (
     <section className="mb-10">
       <SectionTitle
@@ -153,9 +156,12 @@ export function AggregatePanel() {
         </div>
         <Legend keys={volKeys} colors={mode === "venue" ? VENUE_COLOR : CLASS_COLOR} active={volSeries.map((s) => s.id)} />
         {volSeries.length ? (
-          <InteractiveChart series={volSeries} fitKey={`vol|${mode}|${rwaOnly}`} height={240} />
+          <InteractiveChart series={volSeries} fitKey={`vol|${mode}|${rwaOnly}`} timeAxis="daily" height={240} showLegend={false} />
         ) : (
           <Empty />
+        )}
+        {volDays > 0 && volDays < 7 && (
+          <p className="mt-1 text-[10px] text-[var(--color-muted)]">building history — {volDays} day{volDays === 1 ? "" : "s"} so far</p>
         )}
       </div>
 
@@ -172,9 +178,14 @@ export function AggregatePanel() {
         </div>
         <Legend keys={CLASS_ORDER.filter((k) => !(rwaOnly && k === "crypto"))} colors={CLASS_COLOR} active={oiSeries.map((s) => s.id.replace("oi-", ""))} />
         {oiSeries.length ? (
-          <InteractiveChart series={oiSeries} fitKey={`oi|${rwaOnly}`} height={220} />
+          <InteractiveChart series={oiSeries} fitKey={`oi|${rwaOnly}|${oiTimeAxis}`} timeAxis={oiTimeAxis} height={220} showLegend={false} />
         ) : (
           <Empty msg="accumulating OI history…" />
+        )}
+        {oiBuilding && (
+          <p className="mt-1 text-[10px] text-[var(--color-muted)]">
+            building history — {Math.max(1, Math.round(oiExtentSec / 3600))}h of snapshots so far
+          </p>
         )}
       </div>
 
