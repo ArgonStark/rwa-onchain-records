@@ -1,13 +1,31 @@
-# EWA Onchain Records — Phase 1
+# EWA Onchain Records — Phases 1 & 2
 
 Live snapshot dashboard for tokenized real-world assets. On-chain perp analytics
-(OI / funding / 24h vol / skew) plus spot-token premium vs real spot. Public,
-no-key sources only.
+(OI / funding / 24h vol / skew) plus spot-token premium vs real spot, an owned
+Postgres time-series, and history charts. Public, no-key data sources.
 
 ```bash
 npm install
-npm run dev      # http://localhost:3000
+npm run dev                        # http://localhost:3000
+
+# Persistence (Phase 2): set DATABASE_URL in .env.local, then snapshot:
+node scripts/snapshot-writer.mjs   # POSTs /api/snapshot every 5 min
 ```
+
+## Phase 2 additions
+
+- **Ostium funding** now read from the `PairInfos` contract (viem), not the
+  subgraph — see the funding investigation in CLAUDE.md. Verified 0 protocol-wide
+  (maxFundingFeePerBlock=0) against subgraph + contract + the app's own UI API.
+- **Equity premium audited**: Jupiter v3's token price and underlying price are
+  independent sources (premium is not circular). Details in CLAUDE.md.
+- **Real Ostium 24h volume** aggregated from `trade` events (no day-data entity).
+- **Postgres persistence**: `perp_snapshots` + `token_snapshots`, written every
+  ~5 min via `/api/snapshot` (or the interval script). Our owned record for RWA
+  series that no public API back-fills.
+- **History + charts**: `/api/history?venue=&symbol=&window=` (snapshots + HL
+  candles for crypto), `/api/history/spark` for inline OI sparklines. Click any
+  perp row (or open `?chart=Venue|SYMBOL`) for an OI + price/volume detail chart.
 
 ## Architecture
 

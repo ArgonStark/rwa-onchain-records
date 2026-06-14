@@ -8,8 +8,16 @@ import type {
   SpotTokenRow,
   TokensResponse,
 } from "@/lib/types";
+import { Sparkline } from "./components/Sparkline";
+import { DetailChart } from "./components/DetailChart";
 
 const REFRESH_MS = 30_000;
+
+type SparkMap = Record<string, number[]>;
+interface DetailTarget {
+  venue: string;
+  symbol: string;
+}
 
 // ── formatting helpers ───────────────────────────────────────────────
 const fmtUsd = (n: number): string => {
@@ -52,15 +60,21 @@ export default function Page() {
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<CatFilter>("all");
+  const [spark, setSpark] = useState<SparkMap>({});
+  const [detail, setDetail] = useState<DetailTarget | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [p, t] = await Promise.all([
+      const [p, t, s] = await Promise.all([
         fetch("/api/perps").then((r) => r.json() as Promise<PerpsResponse>),
         fetch("/api/tokens").then((r) => r.json() as Promise<TokensResponse>),
+        fetch("/api/history/spark")
+          .then((r) => r.json() as Promise<{ series: SparkMap }>)
+          .catch(() => ({ series: {} })),
       ]);
       setPerps(p);
       setTokens(t);
+      setSpark(s.series ?? {});
       setErr(null);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -74,6 +88,15 @@ export default function Page() {
     const id = setInterval(() => void load(), REFRESH_MS);
     return () => clearInterval(id);
   }, [load]);
+
+  // Deep link: ?chart=Venue|SYMBOL opens that history chart (shareable).
+  useEffect(() => {
+    const c = new URLSearchParams(window.location.search).get("chart");
+    if (c?.includes("|")) {
+      const [venue, symbol] = c.split("|");
+      if (venue && symbol) setDetail({ venue, symbol });
+    }
+  }, []);
 
   const markets = (perps?.markets ?? []).filter(
     (m) => filter === "all" || m.category === filter,
@@ -95,10 +118,10 @@ export default function Page() {
         <SectionTitle
           n="01"
           title="PERP LEDGER"
-          desc="Live OI · funding · 24h vol · skew across public RWA + crypto perp venues, sorted by open interest."
+          desc="Live OI · funding · 24h vol · skew across public RWA + crypto perp venues, sorted by OI. Sparkline = OI trend from our snapshots; click a row for full history."
         />
         <FilterBar filter={filter} setFilter={setFilter} markets={perps?.markets} />
-        <PerpTable markets={markets} />
+        <PerpTable markets={markets} spark={spark} onSelect={setDetail} />
       </section>
 
       <section className="mb-10">
@@ -111,6 +134,14 @@ export default function Page() {
       </section>
 
       <Footer />
+
+      {detail && (
+        <DetailChart
+          venue={detail.venue}
+          symbol={detail.symbol}
+          onClose={() => setDetail(null)}
+        />
+      )}
     </main>
   );
 }
@@ -132,8 +163,8 @@ function Header({ asOf, loading }: { asOf?: string; loading: boolean }) {
         </p>
       </div>
       <p className="mt-1 text-xs text-[var(--color-muted)]">
-        on-chain analytics for tokenized real-world assets — public, no-key
-        sources only (Phase 1)
+        on-chain analytics for tokenized real-world assets — live snapshot +
+        owned time-series (click any row for history)
       </p>
     </header>
   );
@@ -224,13 +255,21 @@ function FilterBar({
   );
 }
 
-function PerpTable({ markets }: { markets: PerpMarket[] }) {
+function PerpTable({
+  markets,
+  spark,
+  onSelect,
+}: {
+  markets: PerpMarket[];
+  spark: SparkMap;
+  onSelect: (t: DetailTarget) => void;
+}) {
   if (markets.length === 0) {
     return <Empty label="no perp markets" />;
   }
   return (
     <div className="overflow-x-auto border border-[var(--color-line)]">
-      <table className="w-full min-w-[640px] border-collapse text-xs sm:text-sm">
+      <table className="w-full min-w-[720px] border-collapse text-xs sm:text-sm">
         <thead>
           <tr className="border-b border-[var(--color-line)] text-left text-[var(--color-muted)]">
             <Th className="pl-3">SYMBOL</Th>
@@ -238,45 +277,62 @@ function PerpTable({ markets }: { markets: PerpMarket[] }) {
             <Th>VENUE</Th>
             <Th className="text-right">MARK</Th>
             <Th className="text-right">OI</Th>
+            <Th className="text-right">OI TREND</Th>
             <Th className="text-right">24H VOL</Th>
             <Th className="text-right">FUNDING</Th>
             <Th className="pr-3 text-right">SKEW (%L)</Th>
           </tr>
         </thead>
         <tbody>
-          {markets.map((m, i) => (
-            <tr
-              key={`${m.venue}:${m.symbol}:${i}`}
-              className="border-b border-[var(--color-line)]/60 hover:bg-[var(--color-panel)]"
-            >
-              <Td className="pl-3 font-bold text-[var(--color-fg)]">{m.symbol}</Td>
-              <Td className={CAT_COLOR[m.category]}>{CAT_LABEL[m.category]}</Td>
-              <Td className="text-[var(--color-muted)]">{m.venue}</Td>
-              <Td className="text-right tabular-nums">{fmtPrice(m.markPx)}</Td>
-              <Td className="text-right tabular-nums">{fmtUsd(m.oiUsd)}</Td>
-              <Td className="text-right tabular-nums text-[var(--color-muted)]">
-                {m.vol24hUsd !== null ? fmtUsd(m.vol24hUsd) : "—"}
-              </Td>
-              <Td className="text-right tabular-nums">
-                {m.funding !== null ? (
-                  <span
-                    className={
-                      m.funding >= 0
-                        ? "text-[var(--color-green)]"
-                        : "text-[var(--color-red)]"
-                    }
-                  >
-                    {fmtPct(m.funding, 4)}
-                  </span>
-                ) : (
-                  "—"
-                )}
-              </Td>
-              <Td className="pr-3 text-right tabular-nums">
-                {m.skew !== null ? <SkewCell skew={m.skew} /> : "—"}
-              </Td>
-            </tr>
-          ))}
+          {markets.map((m, i) => {
+            const open = () => onSelect({ venue: m.venue, symbol: m.symbol });
+            return (
+              <tr
+                key={`${m.venue}:${m.symbol}:${i}`}
+                onClick={open}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    open();
+                  }
+                }}
+                tabIndex={0}
+                role="button"
+                aria-label={`${m.symbol} on ${m.venue} — open history chart`}
+                className="cursor-pointer border-b border-[var(--color-line)]/60 hover:bg-[var(--color-panel)]"
+              >
+                <Td className="pl-3 font-bold text-[var(--color-fg)]">{m.symbol}</Td>
+                <Td className={CAT_COLOR[m.category]}>{CAT_LABEL[m.category]}</Td>
+                <Td className="text-[var(--color-muted)]">{m.venue}</Td>
+                <Td className="text-right tabular-nums">{fmtPrice(m.markPx)}</Td>
+                <Td className="text-right tabular-nums">{fmtUsd(m.oiUsd)}</Td>
+                <Td className="text-right">
+                  <Sparkline data={spark[`${m.venue}|${m.symbol}`]} />
+                </Td>
+                <Td className="text-right tabular-nums text-[var(--color-muted)]">
+                  {m.vol24hUsd !== null ? fmtUsd(m.vol24hUsd) : "—"}
+                </Td>
+                <Td className="text-right tabular-nums">
+                  {m.funding !== null ? (
+                    <span
+                      className={
+                        m.funding >= 0
+                          ? "text-[var(--color-green)]"
+                          : "text-[var(--color-red)]"
+                      }
+                    >
+                      {fmtPct(m.funding, 4)}
+                    </span>
+                  ) : (
+                    "—"
+                  )}
+                </Td>
+                <Td className="pr-3 text-right tabular-nums">
+                  {m.skew !== null ? <SkewCell skew={m.skew} /> : "—"}
+                </Td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
