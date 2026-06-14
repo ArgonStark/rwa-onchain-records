@@ -66,6 +66,29 @@ across perp venues, and perp–spot basis. Not a re-served price feed.
   premium/discount, not a token-vs-itself artifact. A keyed equities API
   (Finnhub/Polygon) can be added later as an independent cross-check.
 
+### Daily notional volume definition (lib/dailyVolume.ts, table daily_volume)
+`daily_volume.notional_usd` = USD notional traded in a market over one **UTC
+calendar day**. `is_approx` flags any series that is not an exact
+midnight-to-midnight notional sum. Per-venue sources and why:
+- **dYdX** — `/v4/candles?resolution=1DAY` `usdVolume`. EXACT (is_approx=false).
+- **Ostium** — `trade` events bucketed by UTC day, `sum(notional/1e6)`. EXACT for
+  the "opened-position notional" definition (Ostium has no day-data entity); same
+  caveat as the 24h figure. Keep the "our owned record / no public API back-fills"
+  label on Ostium series.
+- **Hyperliquid + HIP-3** — 1d `candleSnapshot`, `notional ≈ base_vol × close`.
+  APPROX (is_approx=true): HL candles carry only base volume, no quote volume, so
+  intraday price variation isn't captured. Verified this reproduces the known
+  xyz:SPCX spike (2026-06-12 ≈ $1.37B, the SpaceX listing day).
+- **Going forward** — `rollupDailyFromSnapshots()` takes, per (venue,symbol,UTC
+  day), the trailing-24h volume (`vol24h`) sampled at the **last snapshot of the
+  day**. APPROX: a rolling-24h sample aligned to the day boundary, not an exact
+  calendar-day sum. This is our owned record once snapshots span days.
+- **Upsert precedence**: EXACT replaces anything; APPROX only fills/updates a day
+  with no exact value — so the snapshot rollup never clobbers an exact seeded day.
+- **DefiLlama cross-check is NOT available**: as of 2026 `/overview/derivatives`
+  and `/summary/derivatives/*` return HTTP 402 (paid plan). We rely on each
+  venue's own authoritative daily source instead; documented, not invented.
+
 ### Ostium 24h volume — aggregated from trades (no day-data entity)
 - The subgraph has NO per-pair day-data entity (only `shareToAssetsPriceDaily` =
   vault LP price). Verified the full entity list 2026-06-14. We compute real 24h

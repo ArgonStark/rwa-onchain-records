@@ -30,8 +30,12 @@ CREATE TABLE IF NOT EXISTS perp_snapshots (
   oi_usd   DOUBLE PRECISION,
   funding  DOUBLE PRECISION,
   vol24h   DOUBLE PRECISION,
-  mark_px  DOUBLE PRECISION
+  mark_px  DOUBLE PRECISION,
+  category TEXT
 );
+-- carry asset class on each snapshot so the daily rollup + class aggregates need
+-- no per-symbol lookup (added after Phase 2; migrate existing tables).
+ALTER TABLE perp_snapshots ADD COLUMN IF NOT EXISTS category TEXT;
 CREATE INDEX IF NOT EXISTS idx_perp_snap_lookup
   ON perp_snapshots (venue, symbol, ts DESC);
 
@@ -45,6 +49,24 @@ CREATE TABLE IF NOT EXISTS token_snapshots (
 );
 CREATE INDEX IF NOT EXISTS idx_token_snap_lookup
   ON token_snapshots (ticker, ts DESC);
+
+-- Daily notional volume (Phase 3). One row per market per UTC day. is_approx
+-- flags series that are not an exact midnight-to-midnight USD-notional sum (see
+-- lib/dailyVolume.ts and CLAUDE.md). category stored so aggregate-by-class reads
+-- need no per-symbol lookup.
+CREATE TABLE IF NOT EXISTS daily_volume (
+  venue        TEXT        NOT NULL,
+  symbol       TEXT        NOT NULL,
+  day          DATE        NOT NULL,
+  notional_usd DOUBLE PRECISION,
+  category     TEXT,
+  source       TEXT        NOT NULL,
+  is_approx    BOOLEAN     NOT NULL DEFAULT false,
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (venue, symbol, day)
+);
+CREATE INDEX IF NOT EXISTS idx_daily_vol_day ON daily_volume (day);
+CREATE INDEX IF NOT EXISTS idx_daily_vol_lookup ON daily_volume (venue, symbol, day);
 `;
 
 let schemaReady = false;

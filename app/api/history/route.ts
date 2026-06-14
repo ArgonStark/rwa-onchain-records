@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { hasDatabase } from "@/lib/db";
+import { getDailyVolume } from "@/lib/dailyVolume";
 import {
   getHlCandles,
   getPerpSeries,
@@ -39,11 +40,20 @@ export async function GET(req: Request) {
     );
   }
 
+  // Daily volume bars always span >= 14 days so the bar chart is meaningful even
+  // at intraday OI/price zoom; OI/price use the selected window.
+  const sinceDay = new Date(Math.min(since, Date.now() - 14 * 86_400_000))
+    .toISOString()
+    .slice(0, 10);
+
   // Own snapshots for every venue; HL candles add real depth for crypto/HIP-3.
-  const [snapshots, candles] = await Promise.all([
+  const [snapshots, candles, dailyVolume] = await Promise.all([
     getPerpSeries(venue, symbol, since),
     getHlCandles(venue, symbol, window, since).catch(() => null),
+    getDailyVolume(venue, symbol, sinceDay).catch(() => []),
   ]);
+
+  const dailyApprox = dailyVolume.some((d) => d.isApprox);
 
   return NextResponse.json({
     kind: "perp",
@@ -53,9 +63,12 @@ export async function GET(req: Request) {
     hasDatabase: hasDatabase(),
     snapshots,
     candles,
+    dailyVolume,
     sources: {
       snapshots: "EWA snapshots (Postgres)",
       candles: candles ? "Hyperliquid candleSnapshot" : null,
+      dailyVolume: dailyVolume[0]?.source ?? null,
+      dailyVolumeApprox: dailyApprox,
     },
   });
 }

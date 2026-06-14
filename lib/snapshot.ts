@@ -1,10 +1,12 @@
 import { aggregatePerps, aggregateTokens } from "./aggregate";
+import { rollupDailyFromSnapshots } from "./dailyVolume";
 import { ensureSchema, getPool } from "./db";
 
 export interface SnapshotResult {
   ts: string;
   perpRows: number;
   tokenRows: number;
+  dailyRollupRows: number;
   venues: { venue: string; status: string; count: number }[];
 }
 
@@ -28,7 +30,7 @@ export async function takeSnapshot(): Promise<SnapshotResult> {
   if (perps.markets.length > 0) {
     const values: unknown[] = [];
     const tuples = perps.markets.map((m, i) => {
-      const b = i * 7;
+      const b = i * 8;
       values.push(
         m.venue,
         m.symbol,
@@ -37,11 +39,12 @@ export async function takeSnapshot(): Promise<SnapshotResult> {
         m.funding,
         m.vol24hUsd,
         m.markPx,
+        m.category,
       );
-      return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7})`;
+      return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8})`;
     });
     const res = await pool.query(
-      `INSERT INTO perp_snapshots (venue, symbol, ts, oi_usd, funding, vol24h, mark_px)
+      `INSERT INTO perp_snapshots (venue, symbol, ts, oi_usd, funding, vol24h, mark_px, category)
        VALUES ${tuples.join(",")}`,
       values,
     );
@@ -65,10 +68,20 @@ export async function takeSnapshot(): Promise<SnapshotResult> {
     tokenRows = res.rowCount ?? 0;
   }
 
+  // Going-forward owned daily record from our snapshots (won't clobber exact
+  // seeded days). Cheap SQL aggregation; non-fatal if it fails.
+  let dailyRollupRows = 0;
+  try {
+    dailyRollupRows = await rollupDailyFromSnapshots();
+  } catch {
+    dailyRollupRows = 0;
+  }
+
   return {
     ts: ts.toISOString(),
     perpRows,
     tokenRows,
+    dailyRollupRows,
     venues: perps.venues.map((v) => ({
       venue: v.venue,
       status: v.status,
