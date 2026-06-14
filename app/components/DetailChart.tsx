@@ -1,12 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { InteractiveChart, type ChartSeries } from "./InteractiveChart";
 
 interface PerpPoint {
   ts: number;
   oiUsd: number | null;
-  vol24h: number | null;
-  funding: number | null;
   markPx: number | null;
 }
 interface CandlePoint {
@@ -14,17 +13,27 @@ interface CandlePoint {
   close: number;
   volUsd: number;
 }
+interface DailyVol {
+  day: string;
+  notionalUsd: number;
+  isApprox: boolean;
+}
 interface HistoryResp {
-  kind: "perp";
   venue: string;
   symbol: string;
-  window: string;
   snapshots: PerpPoint[];
   candles: CandlePoint[] | null;
-  sources: { snapshots: string; candles: string | null };
+  dailyVolume: DailyVol[];
+  sources: {
+    snapshots: string;
+    candles: string | null;
+    dailyVolume: string | null;
+    dailyVolumeApprox: boolean;
+  };
 }
 
 const WINDOWS = ["6h", "24h", "7d", "30d"] as const;
+const REFRESH_MS = 30_000;
 
 const fmtUsd = (n: number): string => {
   const a = Math.abs(n);
@@ -33,6 +42,10 @@ const fmtUsd = (n: number): string => {
   if (a >= 1e3) return `$${(n / 1e3).toFixed(1)}K`;
   return `$${n.toFixed(0)}`;
 };
+const fmtPx = (n: number): string =>
+  n >= 1000 ? `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : `$${n.toFixed(2)}`;
+
+const dayToSec = (day: string): number => Date.parse(`${day}T00:00:00Z`) / 1000;
 
 export function DetailChart({
   venue,
@@ -43,31 +56,34 @@ export function DetailChart({
   symbol: string;
   onClose: () => void;
 }) {
-  const [window, setWindow] = useState("24h");
+  const [window, setWindow] = useState<(typeof WINDOWS)[number]>("7d");
   const [data, setData] = useState<HistoryResp | null>(null);
   const [loading, setLoading] = useState(true);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const isOstium = venue === "Ostium";
 
-  useEffect(() => {
-    let live = true;
-    setLoading(true);
-    fetch(
-      `/api/history?venue=${encodeURIComponent(venue)}&symbol=${encodeURIComponent(symbol)}&window=${window}`,
-    )
-      .then((r) => r.json() as Promise<HistoryResp>)
-      .then((d) => {
-        if (live) {
+  const fetchData = useCallback(
+    (showLoading: boolean) => {
+      if (showLoading) setLoading(true);
+      return fetch(
+        `/api/history?venue=${encodeURIComponent(venue)}&symbol=${encodeURIComponent(symbol)}&window=${window}`,
+      )
+        .then((r) => r.json() as Promise<HistoryResp>)
+        .then((d) => {
           setData(d);
           setLoading(false);
-        }
-      })
-      .catch(() => live && setLoading(false));
-    return () => {
-      live = false;
-    };
-  }, [venue, symbol, window]);
+        })
+        .catch(() => setLoading(false));
+    },
+    [venue, symbol, window],
+  );
 
-  // Esc to close; focus the close button on open.
+  useEffect(() => {
+    void fetchData(true);
+    const id = setInterval(() => void fetchData(false), REFRESH_MS); // live: same window -> series.update()
+    return () => clearInterval(id);
+  }, [fetchData]);
+
   useEffect(() => {
     closeRef.current?.focus();
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -82,20 +98,75 @@ export function DetailChart({
     [onClose],
   );
 
-  const oi = (data?.snapshots ?? [])
-    .filter((p) => p.oiUsd !== null)
-    .map((p) => ({ ts: p.ts, v: p.oiUsd as number }));
-  const candles = data?.candles ?? [];
+  const series = useMemo<ChartSeries[]>(() => {
+    if (!data) return [];
+    const out: ChartSeries[] = [];
+
+    // Pane 0: price line (candles if present, else snapshot mark) + volume overlay.
+    const priceData =
+      data.candles && data.candles.length > 1
+        ? data.candles.map((c) => ({ time: Math.floor(c.ts / 1000), value: c.close }))
+        : data.snapshots
+            .filter((p) => p.markPx !== null)
+            .map((p) => ({ time: Math.floor(p.ts / 1000), value: p.markPx as number }));
+    if (priceData.length) {
+      out.push({
+        id: "price",
+        label: "Mark",
+        type: "line",
+        data: priceData,
+        color: "#f5b13d",
+        pane: 0,
+        format: fmtPx,
+        approx: !data.candles || data.candles.length <= 1,
+      });
+    }
+
+    if (data.dailyVolume.length) {
+      out.push({
+        id: "vol",
+        label: "Daily vol",
+        type: "histogram",
+        data: data.dailyVolume.map((d) => ({ time: dayToSec(d.day), value: d.notionalUsd })),
+        color: "rgba(107,122,116,0.45)",
+        pane: 0,
+        overlay: true,
+        format: fmtUsd,
+        approx: data.sources.dailyVolumeApprox,
+      });
+    }
+
+    // Pane 1: OI line (our owned snapshots).
+    const oiData = data.snapshots
+      .filter((p) => p.oiUsd !== null)
+      .map((p) => ({ time: Math.floor(p.ts / 1000), value: p.oiUsd as number }));
+    if (oiData.length) {
+      out.push({
+        id: "oi",
+        label: "Open interest",
+        type: "line",
+        data: oiData,
+        color: "#46e39b",
+        pane: 1,
+        format: fmtUsd,
+      });
+    }
+    return out;
+  }, [data]);
+
+  const hasOi = series.some((s) => s.id === "oi" && s.data.length > 1);
+  // Stable identity so InteractiveChart's data effect only runs on real changes.
+  const paneStretch = useMemo(() => (hasOi ? [2, 1] : [1]), [hasOi]);
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-3"
       onClick={onBackdrop}
       role="dialog"
       aria-modal="true"
       aria-label={`${symbol} on ${venue} history`}
     >
-      <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto border border-[var(--color-line)] bg-[var(--color-panel)] p-4">
+      <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto border border-[var(--color-line)] bg-[var(--color-panel)] p-3 sm:p-4">
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
           <h3 className="text-sm font-bold tracking-wide text-[var(--color-fg)]">
             {symbol} <span className="text-[var(--color-muted)]">@ {venue}</span>
@@ -127,171 +198,40 @@ export function DetailChart({
           </div>
         </div>
 
-        {loading ? (
-          <p className="py-10 text-center text-xs text-[var(--color-muted)]">
-            loading…
+        <p className="mb-2 text-[11px] text-[var(--color-muted)]">
+          Mark price + daily notional volume (bars), with open interest below. Drag
+          to pan, scroll/pinch to zoom, hover for values.
+        </p>
+
+        {loading && !data ? (
+          <p className="py-16 text-center text-xs text-[var(--color-muted)]">loading…</p>
+        ) : series.length === 0 ? (
+          <p className="py-16 text-center text-xs text-[var(--color-muted)]">
+            no data yet — accumulating
           </p>
         ) : (
-          <div className="space-y-5">
-            <LineChart
-              title="Open Interest — EWA snapshots (our owned record)"
-              points={oi}
-              format={fmtUsd}
-              color="var(--color-green)"
-              empty="accumulating — snapshots every 5 min"
-            />
-            {candles.length > 1 ? (
-              <PriceVolChart candles={candles} />
-            ) : (
-              <LineChart
-                title="Mark price — EWA snapshots"
-                points={(data?.snapshots ?? [])
-                  .filter((p) => p.markPx !== null)
-                  .map((p) => ({ ts: p.ts, v: p.markPx as number }))}
-                format={(n) => `$${n.toFixed(2)}`}
-                color="var(--color-amber)"
-                empty="accumulating"
-              />
-            )}
-            <p className="text-[10px] text-[var(--color-muted)]">
-              sources: {data?.sources.snapshots}
-              {data?.sources.candles ? ` · ${data.sources.candles}` : ""}. RWA
-              venues (Ostium) serve entirely from our snapshots — no public API
-              back-fills this series.
-            </p>
-          </div>
+          <InteractiveChart
+            series={series}
+            fitKey={`${venue}|${symbol}|${window}`}
+            paneStretch={paneStretch}
+            height={380}
+          />
         )}
-      </div>
-    </div>
-  );
-}
 
-// ── inline SVG charts ─────────────────────────────────────────────────
-const W = 640;
-const H = 150;
-const PAD = 4;
-
-function LineChart({
-  title,
-  points,
-  format,
-  color,
-  empty,
-}: {
-  title: string;
-  points: { ts: number; v: number }[];
-  format: (n: number) => string;
-  color: string;
-  empty: string;
-}) {
-  return (
-    <div>
-      <p className="mb-1 text-xs text-[var(--color-muted)]">{title}</p>
-      {points.length < 2 ? (
-        <div className="border border-dashed border-[var(--color-line)] px-3 py-8 text-center text-xs text-[var(--color-muted)]">
-          {empty} ({points.length} point{points.length === 1 ? "" : "s"})
+        <div className="mt-3 space-y-0.5 text-[10px] text-[var(--color-muted)]">
+          <p>
+            <span className="text-[#46e39b]">OI</span> — EWA snapshots (Postgres).{" "}
+            <span className="text-[#f5b13d]">price</span> —{" "}
+            {data?.sources.candles ?? "EWA snapshot mark"}.{" "}
+            <span>volume</span> — {data?.sources.dailyVolume ?? "—"}
+            {data?.sources.dailyVolumeApprox ? " (≈ approximate)" : " (exact)"}.
+          </p>
+          {isOstium && (
+            <p className="text-[var(--color-amber)]">
+              Ostium is our owned record — no public API back-fills this series.
+            </p>
+          )}
         </div>
-      ) : (
-        <Plot points={points} color={color} format={format} />
-      )}
-    </div>
-  );
-}
-
-function Plot({
-  points,
-  color,
-  format,
-}: {
-  points: { ts: number; v: number }[];
-  color: string;
-  format: (n: number) => string;
-}) {
-  const vals = points.map((p) => p.v);
-  const min = Math.min(...vals);
-  const max = Math.max(...vals);
-  const range = max - min || 1;
-  const t0 = points[0]!.ts;
-  const tRange = points[points.length - 1]!.ts - t0 || 1;
-  const xy = points.map((p) => {
-    const x = PAD + ((p.ts - t0) / tRange) * (W - 2 * PAD);
-    const y = PAD + (1 - (p.v - min) / range) * (H - 2 * PAD);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  });
-  const last = points[points.length - 1]!.v;
-  const first = points[0]!.v;
-  return (
-    <div>
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        className="w-full border border-[var(--color-line)]"
-        preserveAspectRatio="none"
-        role="img"
-        aria-label="time series chart"
-      >
-        <polyline points={xy.join(" ")} fill="none" stroke={color} strokeWidth="1.5" />
-      </svg>
-      <div className="mt-1 flex justify-between text-[10px] text-[var(--color-muted)] tabular-nums">
-        <span>lo {format(min)}</span>
-        <span>
-          first {format(first)} → last {format(last)}
-        </span>
-        <span>hi {format(max)}</span>
-      </div>
-    </div>
-  );
-}
-
-function PriceVolChart({ candles }: { candles: CandlePoint[] }) {
-  const closes = candles.map((c) => c.close);
-  const cMin = Math.min(...closes);
-  const cMax = Math.max(...closes);
-  const cRange = cMax - cMin || 1;
-  const vMax = Math.max(...candles.map((c) => c.volUsd)) || 1;
-  const t0 = candles[0]!.ts;
-  const tRange = candles[candles.length - 1]!.ts - t0 || 1;
-
-  const line = candles
-    .map((c) => {
-      const x = PAD + ((c.ts - t0) / tRange) * (W - 2 * PAD);
-      const y = PAD + (1 - (c.close - cMin) / cRange) * (H - 2 * PAD);
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-  const barW = Math.max(1, (W - 2 * PAD) / candles.length - 1);
-
-  return (
-    <div>
-      <p className="mb-1 text-xs text-[var(--color-muted)]">
-        Price &amp; volume — Hyperliquid candles
-      </p>
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        className="w-full border border-[var(--color-line)]"
-        preserveAspectRatio="none"
-        role="img"
-        aria-label="price and volume chart"
-      >
-        {candles.map((c, i) => {
-          const x = PAD + ((c.ts - t0) / tRange) * (W - 2 * PAD);
-          const h = (c.volUsd / vMax) * (H * 0.4);
-          return (
-            <rect
-              key={i}
-              x={x - barW / 2}
-              y={H - PAD - h}
-              width={barW}
-              height={h}
-              fill="var(--color-line)"
-            />
-          );
-        })}
-        <polyline points={line} fill="none" stroke="var(--color-amber)" strokeWidth="1.5" />
-      </svg>
-      <div className="mt-1 flex justify-between text-[10px] text-[var(--color-muted)] tabular-nums">
-        <span>${cMin.toFixed(2)}</span>
-        <span>vol max {fmtUsd(vMax)}/candle</span>
-        <span>${cMax.toFixed(2)}</span>
       </div>
     </div>
   );
