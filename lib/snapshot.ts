@@ -26,11 +26,15 @@ export async function takeSnapshot(): Promise<SnapshotResult> {
     aggregateTokens(),
   ]);
 
-  // A snapshot is a coherent cross-venue OI slice. If ANY venue failed, the
-  // totals would be partial and poison the aggregate time-series (a fake dip to
-  // ~0). Skip the whole perp write rather than store a misleading slice — a gap
-  // is honest; a partial total is not.
-  const downVenues = perps.venues.filter((v) => v.status !== "ok" || v.count === 0);
+  // A snapshot is a coherent cross-venue OI slice. If a normally-live venue
+  // failed, the totals would be partial and poison the aggregate time-series (a
+  // fake dip to ~0). Skip the whole perp write rather than store a misleading
+  // slice — a gap is honest; a partial total is not. A "pending" venue (no
+  // public API yet, e.g. Variational) is EXPECTED to be empty and must not block
+  // the snapshot.
+  const downVenues = perps.venues.filter(
+    (v) => v.status === "error" || (v.status === "ok" && v.count === 0),
+  );
   if (downVenues.length > 0) {
     return {
       ts: ts.toISOString(),

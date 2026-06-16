@@ -43,6 +43,9 @@ const VENUE_COLOR: Record<string, string> = {
   "Hyperliquid HIP-3": "#f5b13d",
   Ostium: "#a78bfa",
   dYdX: "#38bdf8",
+  Lighter: "#2dd4bf",
+  Aster: "#fb7185",
+  Variational: "#94a3b8",
 };
 const CLASS_ORDER = ["equity", "commodity", "index", "forex", "crypto"];
 
