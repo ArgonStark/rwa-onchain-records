@@ -80,6 +80,11 @@ const VENUE_OVERRIDES: Record<string, Record<string, AssetCategory>> = {
   Aster: {
     CBRS: "equity", // Aster tags CBRS as a STOCK contract (authoritative subType)
   },
+  dYdX: {
+    // dYdX's "SPX" is the SPX6900 memecoin (~$0.38), NOT the S&P 500 index —
+    // verified against live mark price 2026-06-16.
+    SPX: "crypto",
+  },
 };
 
 // Symbols that fell through to the default. Logged once each so we can review

@@ -1,3 +1,4 @@
+import { classify } from "../classify";
 import type { PerpMarket, VenueResult } from "../types";
 
 // dYdX v4 indexer — verified live 2026-06-13.
@@ -9,7 +10,11 @@ import type { PerpMarket, VenueResult } from "../types";
 //  - openInterest is in BASE units -> oiUsd = openInterest * oraclePrice.
 //  - volume24H is already USD notional.
 //  - nextFundingRate is the upcoming 1h funding rate as a fraction.
-//  - No long/short split -> skew is null. dYdX is crypto-only.
+//  - No long/short split -> skew is null.
+//  - dYdX has historically been crypto-only, but markets are governance-listed
+//    and can change, so we run every ticker through the shared classifier rather
+//    than hardcoding crypto — any RWA listing (e.g. a TSLA synthetic) is tagged
+//    automatically.
 
 const MARKETS_URL = "https://indexer.dydx.trade/v4/perpetualMarkets";
 
@@ -45,10 +50,11 @@ export async function getDydxPerps(): Promise<VenueResult> {
       const funding = Number(m.nextFundingRate);
       const vol = Number(m.volume24H);
 
+      const symbol = m.ticker.replace(/-USD$/, "");
       markets.push({
         venue,
-        symbol: m.ticker.replace(/-USD$/, ""),
-        category: "crypto",
+        symbol,
+        category: classify(symbol, venue),
         markPx: price,
         oiUsd: oi * price,
         vol24hUsd: Number.isFinite(vol) ? vol : null,
