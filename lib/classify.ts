@@ -85,6 +85,9 @@ const VENUE_OVERRIDES: Record<string, Record<string, AssetCategory>> = {
     // verified against live mark price 2026-06-16.
     SPX: "crypto",
   },
+  Variational: {
+    SPX: "crypto", // also SPX6900 (~$0.39), not the S&P index
+  },
 };
 
 // Symbols that fell through to the default. Logged once each so we can review
