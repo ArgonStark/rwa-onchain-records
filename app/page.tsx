@@ -184,14 +184,20 @@ function VenueStrip({ perps }: { perps: PerpsResponse | null }) {
             className={
               v.status === "ok"
                 ? "text-[var(--color-green)]"
-                : "text-[var(--color-red)]"
+                : v.status === "pending"
+                  ? "text-[var(--color-amber)]"
+                  : "text-[var(--color-red)]"
             }
           >
-            ●
+            {v.status === "pending" ? "◌" : "●"}
           </span>
           <span className="text-[var(--color-fg)]">{v.venue}</span>
           <span className="text-[var(--color-muted)]">
-            {v.status === "ok" ? `${v.count}` : "down"}
+            {v.status === "ok"
+              ? `${v.count}`
+              : v.status === "pending"
+                ? "pending"
+                : "down"}
           </span>
         </span>
       ))}

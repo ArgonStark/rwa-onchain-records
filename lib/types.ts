@@ -7,7 +7,9 @@ export type AssetCategory =
   | "forex"
   | "index";
 
-export type SourceStatus = "ok" | "error";
+// "pending" = adapter is wired but the venue has no public market-data API yet
+// (e.g. Variational) — it returns no markets, not an error.
+export type SourceStatus = "ok" | "error" | "pending";
 
 /**
  * One normalized perp market. Every source adapter returns these.
