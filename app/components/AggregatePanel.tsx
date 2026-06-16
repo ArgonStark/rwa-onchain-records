@@ -156,7 +156,7 @@ export function AggregatePanel() {
         </div>
         <Legend keys={volKeys} colors={mode === "venue" ? VENUE_COLOR : CLASS_COLOR} active={volSeries.map((s) => s.id)} />
         {volSeries.length ? (
-          <InteractiveChart series={volSeries} fitKey={`vol|${mode}|${rwaOnly}`} timeAxis="daily" height={240} showLegend={false} />
+          <InteractiveChart series={volSeries} fitKey={`vol|${mode}|${rwaOnly}`} timeAxis="daily" height={240} showLegend={false} interactive={false} />
         ) : (
           <Empty />
         )}
@@ -178,7 +178,7 @@ export function AggregatePanel() {
         </div>
         <Legend keys={CLASS_ORDER.filter((k) => !(rwaOnly && k === "crypto"))} colors={CLASS_COLOR} active={oiSeries.map((s) => s.id.replace("oi-", ""))} />
         {oiSeries.length ? (
-          <InteractiveChart series={oiSeries} fitKey={`oi|${rwaOnly}|${oiTimeAxis}`} timeAxis={oiTimeAxis} height={220} showLegend={false} />
+          <InteractiveChart series={oiSeries} fitKey={`oi|${rwaOnly}|${oiTimeAxis}`} timeAxis={oiTimeAxis} height={220} showLegend={false} interactive={false} />
         ) : (
           <Empty msg="accumulating OI history…" />
         )}

@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import {
   createChart,
   LineSeries,
+  AreaSeries,
   HistogramSeries,
   CrosshairMode,
   LineStyle,
@@ -12,6 +13,7 @@ import {
   type UTCTimestamp,
   type SeriesType,
   type Time,
+  type LogicalRange,
 } from "lightweight-charts";
 import { compactUsd } from "@/lib/format";
 
@@ -20,9 +22,19 @@ const THEME = {
   bg: "#07090a",
   text: "#c9d4cf",
   muted: "#6b7a74",
-  grid: "rgba(28,35,38,0.35)",
+  grid: "rgba(28,35,38,0.5)",
+  crosshair: "#5b6a64",
   label: "#11171a",
 };
+
+// #rrggbb -> rgba() with alpha, for area-fill gradients derived from a line color.
+function rgba(hex: string, a: number): string {
+  const m = hex.replace("#", "");
+  const r = parseInt(m.slice(0, 2), 16);
+  const g = parseInt(m.slice(2, 4), 16);
+  const b = parseInt(m.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${a})`;
+}
 
 export interface ChartSeries {
   id: string;
@@ -33,6 +45,7 @@ export interface ChartSeries {
   color: string;
   pane: number; // 0 = top
   overlay?: boolean; // histogram on its own overlay scale (volume under price)
+  area?: boolean; // single-metric line -> render as area with a gradient fill
   format: (n: number) => string;
   approx?: boolean;
 }
@@ -45,25 +58,29 @@ interface Props {
   // Time-axis style: HH:MM for intraday ranges, MMM DD for multi-day. One format
   // per axis — never mixed.
   timeAxis: "intraday" | "daily";
-  // Explicit window {from,to} in epoch SECONDS. When set, the chart shows exactly
-  // this range on a fitKey change (instead of fitContent), so series with shorter
-  // history render an empty gap on the left rather than rescaling to their own
-  // extent. Essential for keeping two stacked charts on one shared domain.
+  // Explicit window {from,to} in epoch SECONDS. When set, the chart opens on
+  // exactly this range (instead of fitContent), so a short-history series renders
+  // an empty gap on the left rather than rescaling to its own extent.
   timeRange?: { from: number; to: number };
-  // Charts sharing a syncId mirror each other's visible time range (pan/zoom on
-  // one moves the other), keeping separate charts locked to one timeline.
+  // Shared bar backbone (epoch SECONDS, ascending) used instead of the internal
+  // grid. Sibling charts that pass the SAME domain get identical logical bar
+  // indices, so logical-range + crosshair sync line up exactly.
+  domain?: number[];
+  // Charts sharing a syncId mirror each other's visible logical range and
+  // crosshair (the official lightweight-charts cross-chart sync pattern).
   syncId?: string;
+  // false → static chart: no pan/zoom/scroll, edges fixed. Default true.
+  interactive?: boolean;
   paneStretch?: number[];
   height?: number;
   showLegend?: boolean;
 }
 
-// Module-level registry so sibling charts mirror each other's time range AND
-// crosshair (hovering one chart shows the matching position on the other).
-type RangeSetter = (r: { from: number; to: number }) => void;
+// One member per chart in a sync group. Siblings drive each other's logical range
+// (pan/zoom) and crosshair (vertical line) through these.
 interface SyncMember {
-  setRange: RangeSetter;
-  setCrosshair: (time: number) => void;
+  applyLogicalRange: (r: LogicalRange) => void;
+  syncCrosshairToTime: (t: number) => void;
   clearCrosshair: () => void;
 }
 const syncGroups = new Map<string, Set<SyncMember>>();
@@ -113,7 +130,9 @@ export function InteractiveChart({
   fitKey,
   timeAxis,
   timeRange,
+  domain,
   syncId,
+  interactive = true,
   paneStretch,
   height = 320,
   showLegend = true,
@@ -130,15 +149,13 @@ export function InteractiveChart({
   timeAxisRef.current = timeAxis;
   const timeRangeRef = useRef(timeRange);
   timeRangeRef.current = timeRange;
-  // Suppress range-change propagation until this time — covers async emission
-  // from any PROGRAMMATIC setVisibleRange (initial fit + sibling mirror) so only
-  // genuine user pan/zoom propagates. Without this, a short-history sibling
-  // ping-pongs the shared window down to its own extent.
-  const suppressUntil = useRef(0);
-  const setRange = useRef<RangeSetter | null>(null);
-  const crosshairFromSibling = useRef(false); // guard against crosshair echo
+  const domainRef = useRef(domain);
+  domainRef.current = domain;
+  // True while WE are programmatically driving the crosshair from a sibling, so
+  // the resulting crosshairMove doesn't render a second tooltip or echo back.
+  const fromSync = useRef(false);
 
-  // Build chart once.
+  // Build chart once (rebuilt only if syncId / interactivity changes).
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -151,7 +168,7 @@ export function InteractiveChart({
         fontFamily: "ui-monospace, Menlo, Consolas, monospace",
         fontSize: 10,
         attributionLogo: false,
-        panes: { separatorColor: THEME.grid, separatorHoverColor: THEME.grid },
+        panes: { separatorColor: THEME.grid, separatorHoverColor: THEME.crosshair },
       },
       // One shared $ formatter for every price scale (price, volume, OI).
       localization: {
@@ -166,34 +183,46 @@ export function InteractiveChart({
             timeZone: "UTC",
           }),
       },
+      // Cleaner look: drop vertical grid lines, keep faint horizontals only.
       grid: {
-        vertLines: { color: THEME.grid },
+        vertLines: { visible: false },
         horzLines: { color: THEME.grid },
       },
       crosshair: {
-        mode: CrosshairMode.Normal,
-        vertLine: { color: THEME.muted, width: 1, style: LineStyle.Dotted, labelBackgroundColor: THEME.label },
-        horzLine: { color: THEME.muted, width: 1, style: LineStyle.Dotted, labelBackgroundColor: THEME.label },
+        mode: CrosshairMode.Magnet,
+        vertLine: { color: THEME.crosshair, width: 1, style: LineStyle.Solid, labelBackgroundColor: THEME.label },
+        horzLine: { color: THEME.crosshair, width: 1, style: LineStyle.Dotted, labelBackgroundColor: THEME.label },
       },
-      rightPriceScale: { borderColor: THEME.grid, entireTextOnly: true },
+      rightPriceScale: {
+        borderVisible: false,
+        entireTextOnly: true,
+        scaleMargins: { top: 0.14, bottom: 0.1 },
+      },
       timeScale: {
-        borderColor: THEME.grid,
+        borderVisible: false,
         timeVisible: true,
         secondsVisible: false,
+        rightOffset: interactive ? 4 : 0,
+        fixLeftEdge: !interactive,
+        fixRightEdge: !interactive,
+        lockVisibleTimeRangeOnResize: true,
         // Consistent ticks: HH:MM intraday vs MMM DD multi-day (reads the ref so
         // a range change re-renders with the right style).
         tickMarkFormatter: (t: Time) =>
           (timeAxisRef.current === "intraday" ? fmtIntraday : fmtDaily)(t as number),
       },
-      handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
-      handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: true },
-      kineticScroll: { touch: !reduce, mouse: false },
+      handleScroll: interactive
+        ? { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false }
+        : false,
+      handleScale: interactive
+        ? { mouseWheel: true, pinch: true, axisPressedMouseMove: true }
+        : false,
+      kineticScroll: { touch: interactive && !reduce, mouse: false },
       autoSize: true,
     });
     chartRef.current = chart;
 
-    // Render this chart's DIY tooltip at a given time/x. Reused for direct hover
-    // and for sibling-driven (synced) crosshair. x is the canvas x in px.
+    // DIY tooltip (LWC ships none). Lists every series value at time t.
     const renderTooltip = (t: number, x: number, y: number) => {
       const tip = tooltipRef.current;
       if (!tip) return;
@@ -209,7 +238,7 @@ export function InteractiveChart({
         .map((s) => {
           const v = nearestValue(s.data, t);
           if (v === null) return "";
-          return `<div style="display:flex;justify-content:space-between;gap:10px">
+          return `<div style="display:flex;justify-content:space-between;gap:12px">
             <span style="color:${s.color}">${s.label}${s.approx ? " ≈" : ""}</span>
             <span style="color:${THEME.text}">${s.format(v)}</span></div>`;
         })
@@ -218,10 +247,10 @@ export function InteractiveChart({
         tip.style.display = "none";
         return;
       }
-      tip.innerHTML = `<div style="color:${THEME.muted};margin-bottom:2px">${when} UTC</div>${rows}`;
+      tip.innerHTML = `<div style="color:${THEME.muted};margin-bottom:3px">${when} UTC</div>${rows}`;
       tip.style.display = "block";
       const cw = el.clientWidth;
-      tip.style.left = `${Math.max(4, Math.min(x + 14, cw - 150))}px`;
+      tip.style.left = `${Math.max(4, Math.min(x + 14, cw - 160))}px`;
       tip.style.top = `${Math.max(4, y)}px`;
     };
     const hideTooltip = () => {
@@ -230,66 +259,35 @@ export function InteractiveChart({
 
     const ts = chart.timeScale();
 
-    // Programmatic range setter (initial fit + sibling mirror). Suppresses the
-    // resulting event so it doesn't re-propagate.
-    const applyRange: RangeSetter = (r) => {
-      suppressUntil.current = Date.now() + 120;
-      try {
-        ts.setVisibleRange({ from: r.from as Time, to: r.to as Time });
-      } catch {
-        /* range outside data — LWC clamps; ignore */
-      }
-    };
-    setRange.current = applyRange;
-
-    // This chart's membership in the sync group: how siblings drive its range
-    // and crosshair. setCrosshair mirrors a hovered time as a vertical line +
-    // tooltip on this chart (the two stacked charts highlight together).
+    // This chart's hooks for siblings (official cross-chart sync pattern). The
+    // crosshair line is mirrored; the text tooltip is NOT — it shows only on the
+    // chart the user is actually hovering, so there's never a second tooltip.
     const selfMember: SyncMember = {
-      setRange: applyRange,
-      setCrosshair: (t) => {
-        crosshairFromSibling.current = true;
+      applyLogicalRange: (r) => ts.setVisibleLogicalRange(r),
+      syncCrosshairToTime: (t) => {
         const first = specRef.current[0];
         const api = first ? seriesRef.current.get(first.id) : undefined;
         const v = first ? nearestValue(first.data, t) : null;
+        fromSync.current = true;
         if (api && v !== null) {
           try {
             chart.setCrosshairPosition(v, t as Time, api);
           } catch {
-            /* ignore */
+            /* time outside this chart's bars — ignore */
           }
+        } else {
+          chart.clearCrosshairPosition();
         }
-        const x = ts.timeToCoordinate(t as Time);
-        if (x !== null) renderTooltip(t, x, 8);
-        crosshairFromSibling.current = false;
+        fromSync.current = false;
       },
       clearCrosshair: () => {
-        crosshairFromSibling.current = true;
+        fromSync.current = true;
         chart.clearCrosshairPosition();
         hideTooltip();
-        crosshairFromSibling.current = false;
+        fromSync.current = false;
       },
     };
 
-    // DIY tooltip in subscribeCrosshairMove (LWC ships none). Also broadcasts the
-    // hovered time to synced siblings so all stacked charts highlight together.
-    chart.subscribeCrosshairMove((param) => {
-      if (!param.point || param.time === undefined) {
-        hideTooltip();
-        if (syncId && !crosshairFromSibling.current) {
-          for (const m of syncGroups.get(syncId) ?? []) if (m !== selfMember) m.clearCrosshair();
-        }
-        return;
-      }
-      const t = param.time as number;
-      renderTooltip(t, param.point.x, param.point.y - 10);
-      if (syncId && !crosshairFromSibling.current) {
-        for (const m of syncGroups.get(syncId) ?? []) if (m !== selfMember) m.setCrosshair(t);
-      }
-    });
-
-    // Time-range sync: a real user pan/zoom on one chart mirrors to siblings
-    // sharing the syncId (by TIME, so different data domains stay aligned).
     if (syncId) {
       let group = syncGroups.get(syncId);
       if (!group) {
@@ -297,13 +295,28 @@ export function InteractiveChart({
         syncGroups.set(syncId, group);
       }
       group.add(selfMember);
+    }
+    const siblings = () =>
+      syncId ? [...(syncGroups.get(syncId) ?? [])].filter((m) => m !== selfMember) : [];
 
-      ts.subscribeVisibleTimeRangeChange((range) => {
-        if (!range || Date.now() < suppressUntil.current) return;
-        const r = { from: range.from as number, to: range.to as number };
-        for (const m of syncGroups.get(syncId) ?? []) {
-          if (m !== selfMember) m.setRange(r);
-        }
+    chart.subscribeCrosshairMove((param) => {
+      if (fromSync.current) return; // programmatic (sibling-driven) — ignore
+      if (!param.point || param.time === undefined) {
+        hideTooltip();
+        for (const m of siblings()) m.clearCrosshair();
+        return;
+      }
+      const t = param.time as number;
+      renderTooltip(t, param.point.x, param.point.y - 10);
+      for (const m of siblings()) m.syncCrosshairToTime(t);
+    });
+
+    // Logical-range sync: programmatic setVisibleLogicalRange does NOT re-emit
+    // this event, so no feedback-loop guard is needed (per the official sample).
+    if (syncId) {
+      ts.subscribeVisibleLogicalRangeChange((range) => {
+        if (!range) return;
+        for (const m of siblings()) m.applyLogicalRange(range);
       });
     }
 
@@ -313,13 +326,12 @@ export function InteractiveChart({
         group?.delete(selfMember);
         if (group && group.size === 0) syncGroups.delete(syncId);
       }
-      setRange.current = null;
       chart.remove();
       chartRef.current = null;
       seriesRef.current.clear();
       lastFitKey.current = "";
     };
-  }, [syncId]);
+  }, [syncId, interactive]);
 
   // Create/update series + data.
   useEffect(() => {
@@ -351,12 +363,39 @@ export function InteractiveChart({
             s.pane,
           );
           if (s.overlay) {
-            api.priceScale().applyOptions({ scaleMargins: { top: 0.7, bottom: 0 } });
+            api.priceScale().applyOptions({ scaleMargins: { top: 0.74, bottom: 0 } });
           }
+        } else if (s.area) {
+          // Single-metric line as an area with a subtle top→bottom gradient.
+          api = chart.addSeries(
+            AreaSeries,
+            {
+              lineColor: s.color,
+              lineWidth: 2,
+              topColor: rgba(s.color, 0.26),
+              bottomColor: rgba(s.color, 0.02),
+              priceLineVisible: false,
+              lastValueVisible: false,
+              crosshairMarkerVisible: true,
+              crosshairMarkerRadius: 3,
+              crosshairMarkerBorderColor: s.color,
+              crosshairMarkerBackgroundColor: THEME.bg,
+            },
+            s.pane,
+          );
         } else {
           api = chart.addSeries(
             LineSeries,
-            { color: s.color, lineWidth: 2, priceLineVisible: false, lastValueVisible: false },
+            {
+              color: s.color,
+              lineWidth: 2,
+              priceLineVisible: false,
+              lastValueVisible: false,
+              crosshairMarkerVisible: true,
+              crosshairMarkerRadius: 3,
+              crosshairMarkerBorderColor: s.color,
+              crosshairMarkerBackgroundColor: THEME.bg,
+            },
             s.pane,
           );
         }
@@ -364,24 +403,26 @@ export function InteractiveChart({
       }
     }
 
-    // LWC needs strictly-ascending unique times (seconds). When a timeRange is
-    // set we clip real points to [from,to] and merge a regular WHITESPACE grid
-    // spanning the whole window (points with no value). The grid gives every
-    // chart an identical time domain AND enough tick anchors for a clean axis,
-    // so a series with little history (e.g. OI) renders an empty gap to the
-    // window edge with correct day/time labels — not rescaled to its own extent.
+    // LWC needs strictly-ascending unique times (seconds). Each series is laid on
+    // a shared backbone of WHITESPACE bars (the `domain` prop, else an even grid
+    // over `timeRange`) so (a) every synced chart has identical logical bar
+    // indices and (b) a short-history series gap-fills to the window edge instead
+    // of rescaling to its own extent.
     const GRID = 64;
     const data = (s: ChartSeries) => {
       const tr = timeRangeRef.current;
+      const dom = domainRef.current;
       const merged = new Map<number, number | undefined>();
-      if (tr) {
+      if (dom && dom.length) {
+        for (const t of dom) merged.set(t, undefined);
+      } else if (tr) {
         const step = (tr.to - tr.from) / GRID;
         for (let i = 0; i <= GRID; i++) merged.set(Math.round(tr.from + i * step), undefined);
       }
       for (const d of s.data) {
         const t = d.time;
         if (tr && (t <= tr.from || t >= tr.to)) continue; // clip to window
-        merged.set(t, d.value); // real value overrides a grid slot
+        merged.set(t, d.value); // real value overrides a backbone slot
       }
       return [...merged.entries()]
         .sort((a, b) => a[0] - b[0])
@@ -395,11 +436,7 @@ export function InteractiveChart({
     if (fitKey !== lastFitKey.current) {
       for (const s of series) seriesRef.current.get(s.id)?.setData(data(s));
       const tr = timeRangeRef.current;
-      suppressUntil.current = Date.now() + 150;
       if (tr) {
-        // Whitespace grid (added in data()) makes from/to valid bar times, so
-        // setVisibleRange snaps to the exact shared window and every synced chart
-        // lands on the identical [from,to] domain.
         chart.timeScale().setVisibleRange({ from: tr.from as Time, to: tr.to as Time });
       } else {
         chart.timeScale().fitContent();
