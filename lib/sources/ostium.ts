@@ -1,4 +1,4 @@
-import { classifySymbol } from "../categories";
+import { classify } from "../classify";
 import { skew as skewMetric } from "../metrics";
 import { getOstiumFundingRates } from "./ostiumFunding";
 import type { PerpMarket, VenueResult } from "../types";
@@ -136,7 +136,7 @@ export async function getOstiumPerps(): Promise<VenueResult> {
       markets.push({
         venue,
         symbol: p.from,
-        category: classifySymbol(p.from),
+        category: classify(p.from, "Ostium"),
         markPx,
         oiUsd,
         // 24h opened notional aggregated from `trade` events (no day-data entity

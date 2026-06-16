@@ -1,4 +1,4 @@
-import { classifySymbol, stripPrefix } from "../categories";
+import { classify, stripPrefix } from "../classify";
 import type { PerpMarket, VenueResult } from "../types";
 
 // Hyperliquid /info — verified live 2026-06-13.
@@ -76,7 +76,7 @@ function normalize(
     out.push({
       venue,
       symbol: stripPrefix(asset.name),
-      category: forceCategory ?? classifySymbol(asset.name),
+      category: forceCategory ?? classify(asset.name, venue),
       markPx,
       oiUsd: oi * markPx,
       vol24hUsd: Number.isFinite(vol) ? vol : null,

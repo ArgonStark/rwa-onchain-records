@@ -1,9 +1,9 @@
-import { classifySymbol } from "./categories";
+import { classify } from "./classify";
 import type { AssetCategory } from "./types";
 
-// Asset class for a (venue, symbol). Hyperliquid's main book and dYdX are
-// crypto-only; HIP-3 and Ostium are mixed, so classify by symbol there.
+// Asset class for a (venue, symbol). Thin wrapper over the shared classifier so
+// callers that only have (venue, symbol) — e.g. the daily-volume seeder — tag
+// consistently with the live source adapters.
 export function categoryFor(venue: string, symbol: string): AssetCategory {
-  if (venue === "Hyperliquid" || venue === "dYdX") return "crypto";
-  return classifySymbol(symbol);
+  return classify(symbol, venue);
 }
