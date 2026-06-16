@@ -4,6 +4,7 @@ import {
 } from "./sources/hyperliquid";
 import { getOstiumPerps } from "./sources/ostium";
 import { getDydxPerps } from "./sources/dydx";
+import { getLighterPerps } from "./sources/lighter";
 import { premium as premiumMetric } from "./metrics";
 import {
   fetchCoinGeckoPrices,
@@ -29,6 +30,7 @@ export async function aggregatePerps(): Promise<PerpsResponse> {
     getHyperliquidHip3Perps(),
     getOstiumPerps(),
     getDydxPerps(),
+    getLighterPerps(),
   ]);
 
   const venues: PerpsResponse["venues"] = [];
