@@ -64,16 +64,24 @@ function build(markets: MarketRow[], metric: "oi" | "vol", rwaOnly: boolean): Tr
   for (const [venue, byClass] of byVenue) {
     const classNodes: TreeDatum[] = [];
     for (const [klass, ms] of byClass) {
-      const sorted = [...ms].sort((a, b) => val(b) - val(a));
+      // Aggregate same-symbol markets within a venue+class: a venue can list the
+      // same underlying in several contracts (Aster ETHUSDT/ETHUSD1, Ostium
+      // USD-base FX before the adapter fix), which would otherwise produce
+      // duplicate tile ids. Sum their value into one tile.
+      const bySym = new Map<string, number>();
+      for (const m of ms) bySym.set(m.symbol, (bySym.get(m.symbol) ?? 0) + val(m));
+      const sorted = [...bySym.entries()]
+        .map(([symbol, v]) => ({ symbol, v }))
+        .sort((a, b) => b.v - a.v);
       const top = sorted.slice(0, CAP_PER_GROUP);
       const rest = sorted.slice(CAP_PER_GROUP);
-      const leaves: TreeDatum[] = top.map((m) => ({
-        id: `${venue}/${klass}/${m.symbol}`,
-        name: m.symbol,
+      const leaves: TreeDatum[] = top.map((s) => ({
+        id: `${venue}/${klass}/${s.symbol}`,
+        name: s.symbol,
         color: classColor(klass),
         venue,
         klass,
-        value: val(m),
+        value: s.v,
       }));
       if (rest.length) {
         leaves.push({
@@ -82,7 +90,7 @@ function build(markets: MarketRow[], metric: "oi" | "vol", rwaOnly: boolean): Tr
           color: classColor(klass),
           venue,
           klass,
-          value: rest.reduce((s, m) => s + val(m), 0),
+          value: rest.reduce((s, r) => s + r.v, 0),
         });
       }
       if (leaves.length) {

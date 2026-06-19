@@ -133,10 +133,17 @@ export async function getOstiumPerps(): Promise<VenueResult> {
       const oiUsd = (longOi + shortOi) * markPx;
       const fundingRate = funding.get(Number(p.id)); // present 0 = real, verified
 
+      // FX pairs are stored as base/quote (from/to). USD-base pairs (USD/JPY,
+      // USD/KRW, …) all have from="USD", so using `from` alone collapses every
+      // one of them to "USD". Use the full pair for forex; non-FX (XAU, AAPL)
+      // keep their bare base ticker.
+      const baseCat = classify(p.from, "Ostium");
+      const symbol = baseCat === "forex" ? `${p.from}${p.to}` : p.from;
+
       markets.push({
         venue,
-        symbol: p.from,
-        category: classify(p.from, "Ostium"),
+        symbol,
+        category: classify(symbol, "Ostium"),
         markPx,
         oiUsd,
         // 24h opened notional aggregated from `trade` events (no day-data entity
