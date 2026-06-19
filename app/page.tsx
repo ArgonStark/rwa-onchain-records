@@ -11,6 +11,8 @@ import type {
 import { Sparkline } from "./components/Sparkline";
 import { DetailChart } from "./components/DetailChart";
 import { AggregatePanel } from "./components/AggregatePanel";
+import { AnalyticsPanel } from "./components/AnalyticsPanel";
+import { SameAssetPanel } from "./components/charts/SameAssetPanel";
 
 const REFRESH_MS = 30_000;
 
@@ -117,6 +119,8 @@ export default function Page() {
 
       <AggregatePanel />
 
+      <AnalyticsPanel />
+
       <section className="mb-10">
         <SectionTitle
           n="01"
@@ -135,6 +139,8 @@ export default function Page() {
         />
         <TokenTable tokens={tokens?.tokens ?? []} />
       </section>
+
+      <SameAssetPanel />
 
       <Footer />
 
