@@ -96,3 +96,22 @@ midnight-to-midnight notional sum. Per-venue sources and why:
   paginated by timestamp. This is "24h opened-position notional" — it counts
   opens, slightly narrower than full taker volume; labelled as such. `null` =
   aggregation failed; `0` = genuinely no trades (e.g. RWA pairs over a weekend).
+
+### Perp-spot basis (Phase 5, lib/basis.ts) — pair by a PRICE GUARD, not name
+- `basis = perpMark / spotTokenPrice − 1` (the on-chain token price = the spot
+  leg, per the metric def), computed only where both legs exist at the latest
+  snapshot. Positive ⇒ perp richer than the token. Verified live 2026-06-19:
+  Gold +0.14%, NVDA +0.07%, AAPL +0.05%, TSLA +0.04%, S&P 500 +0.01%, CRCL −0.02%
+  — all sub-1%, as tokenization basis should be.
+- Pairing tokens to perps by SYMBOL ALONE is unsafe because venues reuse names
+  across scales/assets. Confirmed live: `SP500`/some `US500` = the S&P INDEX
+  LEVEL (~7490), 10× the SPY-ETF scale (~746); `SPX` on Aster/Lighter = the
+  SPX6900 MEMECOIN (~$0.36). Even the SAME symbol (`US500`) appears at BOTH
+  scales across venues (Variational ~746 vs Lighter ~7490).
+- So we pair a curated symbol set per token AND gate with a ±10% price-proximity
+  guard (`PRICE_TOL`): a perp only pairs if its mark is within 10% of the token
+  price. Real basis is sub-1%, so the guard drops every scale/asset mismatch and
+  never a genuine pair. For SPYx this correctly selects Variational `US500` (746)
+  and rejects the index-level and memecoin contracts.
+- One dot per asset = the deepest (highest-OI) in-scale perp leg. Tokens:
+  PAXG/XAUT→gold, AAPLx/NVDAx/TSLAx/CRCLx→their tickers, SPYx→S&P-500 ETF scale.

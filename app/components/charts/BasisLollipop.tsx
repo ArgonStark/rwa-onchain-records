@@ -50,9 +50,9 @@ export function BasisLollipop() {
       caption={
         pending
           ? data?.status ?? "pending: basis not yet computed (Phase 5)"
-          : "live basis across venues where both a perp and a spot-token leg exist."
+          : "perp leg = deepest (highest-OI) venue; spot leg = the on-chain token price. only pairs whose perp mark is within ~10% of the token price (guards against index-level vs ETF-scale and same-name memecoins)."
       }
-      source="source: EWA (Phase 5 — perp_snapshots × token_snapshots)"
+      source="source: EWA perp_snapshots × token_snapshots (latest slice)"
     >
       {pending ? (
         <CardEmpty msg={data?.status ?? "pending: basis not yet computed (Phase 5)"} />
