@@ -1,4 +1,6 @@
 // Tiny inline OI sparkline — dependency-free SVG. Grows as snapshots accumulate.
+// Renders nothing until at least 3 snapshots exist (a 2-point line is just a
+// slope, not a trend) — no placeholder, so sparse rows read as blank, not broken.
 export function Sparkline({
   data,
   width = 64,
@@ -8,13 +10,7 @@ export function Sparkline({
   width?: number;
   height?: number;
 }) {
-  if (!data || data.length < 2) {
-    return (
-      <span className="text-[var(--color-muted)]" title="accumulating history">
-        ·
-      </span>
-    );
-  }
+  if (!data || data.length < 3) return null;
   const min = Math.min(...data);
   const max = Math.max(...data);
   const range = max - min || 1;

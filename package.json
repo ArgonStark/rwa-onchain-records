@@ -3,7 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/dev.mjs",
+    "dev:next": "next dev",
+    "db:start": "pg_ctl -D .pgdata -l .pgdata/server.log start",
+    "db:stop": "pg_ctl -D .pgdata stop",
+    "db:status": "pg_ctl -D .pgdata status",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
