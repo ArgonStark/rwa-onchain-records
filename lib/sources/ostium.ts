@@ -130,7 +130,9 @@ export async function getOstiumPerps(): Promise<VenueResult> {
       const shortOi = Number(p.shortOI) / E18;
       if (!Number.isFinite(markPx) || markPx <= 0) continue;
 
-      const oiUsd = (longOi + shortOi) * markPx;
+      // longOI + shortOI are both sides of a zero-sum book; divide by 2 to get
+      // single-sided OI (matching HL/dYdX convention: one-side notional).
+      const oiUsd = ((longOi + shortOi) / 2) * markPx;
       const fundingRate = funding.get(Number(p.id)); // present 0 = real, verified
 
       // FX pairs are stored as base/quote (from/to). USD-base pairs (USD/JPY,

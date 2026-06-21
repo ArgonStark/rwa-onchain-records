@@ -10,6 +10,7 @@ import { getVariationalPerps } from "./sources/variational";
 import { premium as premiumMetric } from "./metrics";
 import {
   fetchCoinGeckoPrices,
+  fetchCoinGeckoMarketData,
   fetchJupiterPrices,
   fetchXauSpot,
   isUsMarketOpen,
@@ -69,12 +70,45 @@ export async function aggregateTokens(): Promise<TokensResponse> {
   const solMints = SPOT_TOKENS.filter((t) => t.chain === "Solana").map(
     (t) => t.address,
   );
+  // Phase 4: fetch full market data (price + supply) for each gold token.
+  const cgTokens = SPOT_TOKENS.filter((t) => t.coingeckoId);
 
-  const [cg, jup, xau] = await Promise.all([
+  const [cg, jup, xau, ...cgMarket] = await Promise.all([
     fetchCoinGeckoPrices(cgIds).catch(() => null),
     fetchJupiterPrices(solMints).catch(() => null),
     fetchXauSpot().catch(() => null),
+    ...cgTokens.map((t) =>
+      fetchCoinGeckoMarketData(t.coingeckoId!).catch(() => null)
+    ),
   ]);
+  // Build coingeckoId -> supply map from market data results
+  const cgSupply = new Map<string, number | null>();
+  cgTokens.forEach((t, i) => {
+    const md = cgMarket[i];
+    cgSupply.set(t.coingeckoId!, md?.circulatingSupply ?? null);
+  });
+
+  // For Solana tokens where Jupiter doesn't return circSupplyPrescaled, fall
+  // back to Solana RPC getTokenSupply (public, no key).
+  const SOL_RPC = process.env.SOLANA_RPC_URL ?? "https://api.mainnet-beta.solana.com";
+  const jupMissingSupply = SPOT_TOKENS.filter(
+    (t) => t.chain === "Solana" && (jup?.get(t.address)?.circulatingSupply ?? null) === null,
+  );
+  const solSupplyFallback = new Map<string, number | null>();
+  await Promise.all(jupMissingSupply.map(async (t) => {
+    try {
+      const res = await fetch(SOL_RPC, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getTokenSupply", params: [t.address] }),
+        cache: "no-store",
+      });
+      if (!res.ok) return;
+      const j = (await res.json()) as { result?: { value?: { uiAmount?: number } } };
+      const amt = j.result?.value?.uiAmount;
+      solSupplyFallback.set(t.address, typeof amt === "number" ? amt : null);
+    } catch { /* best-effort */ }
+  }));
 
   const marketOpen = isUsMarketOpen();
 
@@ -83,6 +117,7 @@ export async function aggregateTokens(): Promise<TokensResponse> {
     let realSpotPrice: number | null = null;
     let priceSource: string | null = null;
     let spotSource: string | null = null;
+    let supply: number | null = null;
     let note: string | undefined;
     let isEquityOpen: boolean | null = null;
 
@@ -91,6 +126,7 @@ export async function aggregateTokens(): Promise<TokensResponse> {
       priceSource = tokenUsdPrice !== null ? "CoinGecko" : null;
       realSpotPrice = xau;
       spotSource = xau !== null ? "gold-api.com (XAU spot)" : null;
+      supply = cgSupply.get(t.coingeckoId) ?? null;
     } else if (t.chain === "Solana") {
       // xStocks: Jupiter v3 gives the on-chain DEX token price AND a real
       // off-chain underlying equity price (audited independent — see prices.ts).
@@ -100,6 +136,7 @@ export async function aggregateTokens(): Promise<TokensResponse> {
       realSpotPrice = jp?.underlyingUsd ?? null;
       spotSource =
         realSpotPrice !== null ? "xStocks underlying (real equity feed)" : null;
+      supply = jp?.circulatingSupply ?? solSupplyFallback.get(t.address) ?? null;
       isEquityOpen = marketOpen;
       if (!marketOpen) {
         note = "US market closed — premium reflects off-hours oracle/last price";
@@ -123,6 +160,7 @@ export async function aggregateTokens(): Promise<TokensResponse> {
       premium,
       priceSource,
       spotSource,
+      supply,
       marketOpen: t.category === "equity" ? isEquityOpen : null,
       note,
     };

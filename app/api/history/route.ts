@@ -27,7 +27,7 @@ export async function GET(req: Request) {
       window,
       hasDatabase: hasDatabase(),
       snapshots: series,
-      sources: { snapshots: "EWA snapshots (Postgres)" },
+      sources: { snapshots: "RWA snapshots (Postgres)" },
     });
   }
 
@@ -65,7 +65,7 @@ export async function GET(req: Request) {
     candles,
     dailyVolume,
     sources: {
-      snapshots: "EWA snapshots (Postgres)",
+      snapshots: "RWA snapshots (Postgres)",
       candles: candles ? "Hyperliquid candleSnapshot" : null,
       dailyVolume: dailyVolume[0]?.source ?? null,
       dailyVolumeApprox: dailyApprox,

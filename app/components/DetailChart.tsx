@@ -113,7 +113,7 @@ export function DetailChart({
         type: "line",
         area: true,
         data: priceData,
-        color: "#f5b13d",
+        color: "#FBBF24",
         pane: 0,
         format: priceUsd,
         approx: !data.candles || data.candles.length <= 1,
@@ -125,7 +125,7 @@ export function DetailChart({
         label: "Daily vol",
         type: "histogram",
         data: data.dailyVolume.map((d) => ({ time: dayToSec(d.day), value: d.notionalUsd })),
-        color: "rgba(107,122,116,0.5)",
+        color: "rgba(100,116,139,0.4)",
         pane: 0,
         overlay: true,
         format: compactUsd,
@@ -150,7 +150,7 @@ export function DetailChart({
         type: "line",
         area: true,
         data: oiData,
-        color: "#46e39b",
+        color: "#34D399",
         pane: 0,
         format: compactUsd,
       },
@@ -202,122 +202,139 @@ export function DetailChart({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-3"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 p-0 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={onBackdrop}
       role="dialog"
       aria-modal="true"
       aria-label={`${symbol} on ${venue} history`}
     >
-      <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto border border-[var(--color-line)] bg-[var(--color-panel)] p-3 sm:p-4">
-        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-          <h3 className="text-sm font-bold tracking-wide text-[var(--color-fg)]">
-            {symbol} <span className="text-[var(--color-muted)]">@ {venue}</span>
-          </h3>
-          <div className="flex items-center gap-1.5">
-            {WINDOWS.map((w) => (
-              <button
-                key={w}
-                type="button"
-                onClick={() => setWindow(w)}
-                aria-pressed={window === w}
-                className={`border px-2 py-0.5 text-xs ${
-                  window === w
-                    ? "border-[var(--color-green)] text-[var(--color-green)]"
-                    : "border-[var(--color-line)] text-[var(--color-muted)] hover:text-[var(--color-fg)]"
-                }`}
-              >
-                {w}
-              </button>
-            ))}
+      <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-t-2xl border border-[var(--color-line)] bg-[var(--color-panel)] shadow-2xl sm:rounded-2xl">
+        {/* Modal header */}
+        <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-t-2xl border-b border-[var(--color-line)] bg-[var(--color-panel)] px-5 py-4">
+          <div>
+            <h3 className="text-base font-semibold text-[var(--color-fg)]">
+              {symbol}
+              <span className="ml-2 text-sm font-normal text-[var(--color-muted)]">
+                @ {venue}
+              </span>
+            </h3>
+            <p className="mt-0.5 font-mono text-[10px] text-[var(--color-subtle)]">
+              Drag · scroll to zoom · hover for values
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex gap-1">
+              {WINDOWS.map((w) => (
+                <button
+                  key={w}
+                  type="button"
+                  onClick={() => setWindow(w)}
+                  aria-pressed={window === w}
+                  className={`cursor-pointer rounded-full border px-3 py-1 font-mono text-xs font-medium transition-all duration-150 ${
+                    window === w
+                      ? "border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
+                      : "border-[var(--color-line)] text-[var(--color-muted)] hover:border-[var(--color-line-strong)] hover:text-[var(--color-fg)]"
+                  }`}
+                >
+                  {w}
+                </button>
+              ))}
+            </div>
             <button
               ref={closeRef}
               type="button"
               onClick={onClose}
-              className="ml-2 border border-[var(--color-line)] px-2 py-0.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-fg)]"
+              className="cursor-pointer rounded-full border border-[var(--color-line)] px-3 py-1 text-xs text-[var(--color-muted)] transition-all duration-150 hover:border-[var(--color-line-strong)] hover:text-[var(--color-fg)]"
             >
-              esc ✕
+              ESC ✕
             </button>
           </div>
         </div>
 
-        <p className="mb-3 text-[11px] text-[var(--color-muted)]">
-          Price &amp; volume above, open interest below — synced on one timeline.
-          Drag to pan, scroll/pinch to zoom either, hover for values.
-        </p>
-
-        {loading && !data ? (
-          <p className="py-16 text-center text-xs text-[var(--color-muted)]">loading…</p>
-        ) : !hasPriceVol && !hasOi ? (
-          <p className="py-16 text-center text-xs text-[var(--color-muted)]">
-            no data yet — accumulating
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {/* Chart 1 — price + daily volume */}
-            <div className="border border-[var(--color-line)]">
-              <div className="border-b border-[var(--color-line)] px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--color-muted)]">
-                Mark price · daily notional volume
-              </div>
-              {hasPriceVol ? (
-                <InteractiveChart
-                  series={priceVolSeries}
-                  fitKey={`pv|${venue}|${symbol}|${window}`}
-                  timeAxis={timeAxis}
-                  timeRange={timeRange}
-                  domain={domain}
-                  syncId={syncId}
-                  height={250}
-                />
-              ) : (
-                <p className="py-10 text-center text-[11px] text-[var(--color-muted)]">
-                  no price/volume series
-                </p>
-              )}
+        <div className="p-4 sm:p-5">
+          {loading && !data ? (
+            <div className="flex items-center justify-center py-20">
+              <span className="font-mono text-sm text-[var(--color-muted)]">Loading…</span>
             </div>
-
-            {/* Chart 2 — open interest (separate chart, synced timeline) */}
-            <div className="border border-[var(--color-line)]">
-              <div className="border-b border-[var(--color-line)] px-2 py-1 text-[10px] uppercase tracking-wide text-[var(--color-muted)]">
-                Open interest · our snapshots
-              </div>
-              {hasOi ? (
-                <InteractiveChart
-                  series={oiSeries}
-                  fitKey={`oi|${venue}|${symbol}|${window}`}
-                  timeAxis={timeAxis}
-                  timeRange={timeRange}
-                  domain={domain}
-                  syncId={syncId}
-                  height={150}
-                />
-              ) : (
-                <p className="py-8 text-center text-[11px] text-[var(--color-muted)]">
-                  OI history is still building — not enough recorded yet for this range
-                </p>
-              )}
+          ) : !hasPriceVol && !hasOi ? (
+            <div className="flex items-center justify-center py-20">
+              <span className="font-mono text-sm text-[var(--color-muted)]">
+                No data yet — accumulating
+              </span>
             </div>
+          ) : (
+            <div className="space-y-3">
+              {/* Chart 1 — price + daily volume */}
+              <div className="overflow-hidden rounded-xl border border-[var(--color-line)] bg-[var(--color-bg)]">
+                <div className="border-b border-[var(--color-line)] bg-[var(--color-panel)] px-4 py-2">
+                  <span className="font-mono text-[10px] uppercase tracking-widest text-[var(--color-muted)]">
+                    Mark price · daily notional volume
+                  </span>
+                </div>
+                {hasPriceVol ? (
+                  <InteractiveChart
+                    series={priceVolSeries}
+                    fitKey={`pv|${venue}|${symbol}|${window}`}
+                    timeAxis={timeAxis}
+                    timeRange={timeRange}
+                    domain={domain}
+                    syncId={syncId}
+                    height={250}
+                  />
+                ) : (
+                  <p className="py-10 text-center font-mono text-xs text-[var(--color-muted)]">
+                    No price/volume series
+                  </p>
+                )}
+              </div>
+
+              {/* Chart 2 — open interest */}
+              <div className="overflow-hidden rounded-xl border border-[var(--color-line)] bg-[var(--color-bg)]">
+                <div className="border-b border-[var(--color-line)] bg-[var(--color-panel)] px-4 py-2">
+                  <span className="font-mono text-[10px] uppercase tracking-widest text-[var(--color-muted)]">
+                    Open interest · our snapshots
+                  </span>
+                </div>
+                {hasOi ? (
+                  <InteractiveChart
+                    series={oiSeries}
+                    fitKey={`oi|${venue}|${symbol}|${window}`}
+                    timeAxis={timeAxis}
+                    timeRange={timeRange}
+                    domain={domain}
+                    syncId={syncId}
+                    height={150}
+                  />
+                ) : (
+                  <p className="py-8 text-center font-mono text-xs text-[var(--color-muted)]">
+                    OI history building — not enough recorded for this range
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* attribution footer */}
+          <div className="mt-4 space-y-1 font-mono text-[10px] text-[var(--color-subtle)]">
+            {oiShort && oiFromLabel && (
+              <p className="text-[var(--color-amber)]">
+                OI recorded from {oiFromLabel} UTC — earlier portion is price/volume
+                only (snapshot history still building).
+              </p>
+            )}
+            <p>
+              <span className="text-[#34D399]">OI</span> — RWA snapshots.{" "}
+              <span className="text-[#FBBF24]">Price</span> —{" "}
+              {data?.sources.candles ?? "RWA snapshot mark"}.{" "}
+              Volume — {data?.sources.dailyVolume ?? "—"}
+              {data?.sources.dailyVolumeApprox ? " (≈ approx)" : " (exact)"}.
+            </p>
+            {isOstium && (
+              <p className="text-[var(--color-amber)]">
+                Ostium is our owned record — no public API back-fills this series.
+              </p>
+            )}
           </div>
-        )}
-
-        <div className="mt-3 space-y-0.5 text-[10px] text-[var(--color-muted)]">
-          {oiShort && oiFromLabel && (
-            <p className="text-[var(--color-amber)]">
-              OI recorded from {oiFromLabel} UTC — earlier of this range is
-              price/volume only (our snapshot history is still building).
-            </p>
-          )}
-          <p>
-            <span className="text-[#46e39b]">OI</span> — EWA snapshots (Postgres).{" "}
-            <span className="text-[#f5b13d]">price</span> —{" "}
-            {data?.sources.candles ?? "EWA snapshot mark"}.{" "}
-            <span>volume</span> — {data?.sources.dailyVolume ?? "—"}
-            {data?.sources.dailyVolumeApprox ? " (≈ approximate)" : " (exact)"}.
-          </p>
-          {isOstium && (
-            <p className="text-[var(--color-amber)]">
-              Ostium is our owned record — no public API back-fills this series.
-            </p>
-          )}
         </div>
       </div>
     </div>

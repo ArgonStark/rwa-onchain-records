@@ -31,21 +31,22 @@ interface AggResp {
 
 const REFRESH_MS = 30_000;
 
+
 const CLASS_COLOR: Record<string, string> = {
-  equity: "#46e39b",
-  commodity: "#f5b13d",
-  index: "#a78bfa",
-  forex: "#38bdf8",
-  crypto: "#8b9690",
+  equity:    "#34D399",
+  commodity: "#FBBF24",
+  index:     "#A78BFA",
+  forex:     "#38BDF8",
+  crypto:    "#64748B",
 };
 const VENUE_COLOR: Record<string, string> = {
-  Hyperliquid: "#8b9690",
-  "Hyperliquid HIP-3": "#f5b13d",
-  Ostium: "#a78bfa",
-  dYdX: "#38bdf8",
-  Lighter: "#2dd4bf",
-  Aster: "#fb7185",
-  Variational: "#94a3b8",
+  Hyperliquid:          "#64748B",
+  "Hyperliquid HIP-3":  "#FBBF24",
+  Ostium:               "#A78BFA",
+  dYdX:                 "#38BDF8",
+  Lighter:              "#2DD4BF",
+  Aster:                "#FB7185",
+  Variational:          "#F97316",
 };
 const CLASS_ORDER = ["equity", "commodity", "index", "forex", "crypto"];
 
@@ -65,7 +66,7 @@ function daySeries(
       label: k,
       type: "line" as const,
       data: points.map((p) => ({ time: daySec(p.day), value: p.byKey[k] ?? 0 })),
-      color: colors[k] ?? "#c9d4cf",
+      color: colors[k] ?? "#94A3B8",
       pane: 0,
       format: fmtUsd,
     }))
@@ -99,6 +100,11 @@ export function AggregatePanel() {
     return daySeries(data.dailyByClass, keys, CLASS_COLOR);
   }, [data, mode, rwaOnly]);
 
+  const oi = data?.oiByClass ?? [];
+  const oiExtentSec = oi.length > 1 ? oi[oi.length - 1]!.t - oi[0]!.t : 0;
+  const oiTimeAxis: "intraday" | "daily" = oiExtentSec < 2 * 86400 ? "intraday" : "daily";
+  const oiBuilding = oi.length > 0 && oiExtentSec < 2 * 86400;
+
   const oiSeries = useMemo<ChartSeries[]>(() => {
     if (!data) return [];
     const keys = CLASS_ORDER.filter((k) => !(rwaOnly && k === "crypto"));
@@ -108,7 +114,7 @@ export function AggregatePanel() {
         label: k,
         type: "line" as const,
         data: data.oiByClass.map((p) => ({ time: p.t, value: p.byKey[k] ?? 0 })),
-        color: CLASS_COLOR[k] ?? "#c9d4cf",
+        color: CLASS_COLOR[k] ?? "#94A3B8",
         pane: 0,
         format: fmtUsd,
       }))
@@ -116,117 +122,197 @@ export function AggregatePanel() {
   }, [data, rwaOnly]);
 
   const h = data?.header;
-  const volKeys = mode === "venue" ? Object.keys(VENUE_COLOR) : CLASS_ORDER.filter((k) => !(rwaOnly && k === "crypto"));
+  const volKeys =
+    mode === "venue"
+      ? Object.keys(VENUE_COLOR)
+      : CLASS_ORDER.filter((k) => !(rwaOnly && k === "crypto"));
 
-  // OI-by-class spans only our recorded snapshots — fit to its real extent and
-  // caption while it's still short. Intraday ticks under ~2 days, else daily.
-  const oi = data?.oiByClass ?? [];
-  const oiExtentSec = oi.length > 1 ? oi[oi.length - 1]!.t - oi[0]!.t : 0;
-  const oiTimeAxis: "intraday" | "daily" = oiExtentSec < 2 * 86400 ? "intraday" : "daily";
-  const oiBuilding = oi.length > 0 && oiExtentSec < 2 * 86400;
   const volDays = data?.dailyByClass.length ?? 0;
 
   return (
-    <section className="mb-10">
+    <section className="mb-12">
       <SectionTitle
         n="00"
         title="RWA MARKET OVERVIEW"
-        desc="Aggregate perp open interest and daily notional across all tracked venues. RWA = non-crypto classes (our thesis); crypto shown for context."
+        desc="Aggregate perp open interest and daily notional across all tracked venues. RWA = non-crypto classes; crypto shown for context."
       />
 
-      {/* header stat strip */}
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Stat label="RWA perp OI" value={h ? fmtUsd(h.rwaOiUsd) : "—"} sub={`of ${h ? fmtUsd(h.totalOiUsd) : "—"} total`} dod={h?.oiDodPct ?? null} />
-        <Stat label="RWA 24h notional" value={h ? fmtUsd(h.rwa24hUsd) : "—"} sub={`of ${h ? fmtUsd(h.total24hUsd) : "—"} total`} dod={h?.volDodPct ?? null} />
-        <Stat label="Total perp OI" value={h ? fmtUsd(h.totalOiUsd) : "—"} sub="all venues" dod={h?.oiDodPct ?? null} />
-        <Stat label="Total 24h notional" value={h ? fmtUsd(h.total24hUsd) : "—"} sub="all venues" dod={h?.volDodPct ?? null} />
+      {/* stat strip */}
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Stat
+          label="RWA Perp OI"
+          value={h ? fmtUsd(h.rwaOiUsd) : "—"}
+          sub={`of ${h ? fmtUsd(h.totalOiUsd) : "—"} total`}
+          dod={h?.oiDodPct ?? null}
+        />
+        <Stat
+          label="RWA 24h Notional"
+          value={h ? fmtUsd(h.rwa24hUsd) : "—"}
+          sub={`of ${h ? fmtUsd(h.total24hUsd) : "—"} total`}
+          dod={h?.volDodPct ?? null}
+        />
+        <Stat
+          label="Total Perp OI"
+          value={h ? fmtUsd(h.totalOiUsd) : "—"}
+          sub="all venues"
+          dod={h?.oiDodPct ?? null}
+        />
+        <Stat
+          label="Total 24h Notional"
+          value={h ? fmtUsd(h.total24hUsd) : "—"}
+          sub="all venues"
+          dod={h?.volDodPct ?? null}
+        />
       </div>
 
-      {/* daily notional volume */}
-      <div className="mb-6 border border-[var(--color-line)] p-3">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-xs font-bold tracking-wide text-[var(--color-fg)]">
-            DAILY NOTIONAL VOLUME{" "}
-            <span className="text-[var(--color-muted)]">· 30d · by {mode}</span>
+      {/* daily volume chart */}
+      <div className="mb-4 rounded-lg border border-[var(--color-line)] bg-[var(--color-panel)] p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-fg)]">
+            Daily Notional Volume
+            <span className="ml-2 font-normal normal-case tracking-normal text-[var(--color-muted)]">
+              · 30d · by {mode}
+            </span>
           </h3>
-          <div className="flex gap-1.5 text-xs">
-            <Toggle on={mode === "class"} onClick={() => setMode("class")}>by class</Toggle>
-            <Toggle on={mode === "venue"} onClick={() => setMode("venue")}>by venue</Toggle>
+          <div className="flex gap-1.5">
+            <Toggle on={mode === "class"} onClick={() => setMode("class")}>
+              By class
+            </Toggle>
+            <Toggle on={mode === "venue"} onClick={() => setMode("venue")}>
+              By venue
+            </Toggle>
             {mode === "class" && (
-              <Toggle on={rwaOnly} onClick={() => setRwaOnly((v) => !v)}>RWA only</Toggle>
+              <Toggle on={rwaOnly} onClick={() => setRwaOnly((v) => !v)}>
+                RWA only
+              </Toggle>
             )}
           </div>
         </div>
-        <Legend keys={volKeys} colors={mode === "venue" ? VENUE_COLOR : CLASS_COLOR} active={volSeries.map((s) => s.id)} />
+        <Legend
+          keys={volKeys}
+          colors={mode === "venue" ? VENUE_COLOR : CLASS_COLOR}
+          active={volSeries.map((s) => s.id)}
+        />
         {volSeries.length ? (
-          <InteractiveChart series={volSeries} fitKey={`vol|${mode}|${rwaOnly}`} timeAxis="daily" height={240} showLegend={false} interactive={false} />
+          <InteractiveChart
+            series={volSeries}
+            fitKey={`vol|${mode}|${rwaOnly}`}
+            timeAxis="daily"
+            height={240}
+            showLegend={false}
+            interactive={false}
+          />
         ) : (
           <Empty />
         )}
         {volDays > 0 && volDays < 7 && (
-          <p className="mt-1 text-[10px] text-[var(--color-muted)]">building history — {volDays} day{volDays === 1 ? "" : "s"} so far</p>
-        )}
-      </div>
-
-      {/* OI by class */}
-      <div className="mb-2 border border-[var(--color-line)] p-3">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-xs font-bold tracking-wide text-[var(--color-fg)]">
-            OPEN INTEREST BY ASSET CLASS{" "}
-            <span className="text-[var(--color-muted)]">· our snapshots</span>
-          </h3>
-          <div className="flex gap-1.5 text-xs">
-            <Toggle on={rwaOnly} onClick={() => setRwaOnly((v) => !v)}>RWA only</Toggle>
-          </div>
-        </div>
-        <Legend keys={CLASS_ORDER.filter((k) => !(rwaOnly && k === "crypto"))} colors={CLASS_COLOR} active={oiSeries.map((s) => s.id.replace("oi-", ""))} />
-        {oiSeries.length ? (
-          <InteractiveChart series={oiSeries} fitKey={`oi|${rwaOnly}|${oiTimeAxis}`} timeAxis={oiTimeAxis} height={220} showLegend={false} interactive={false} />
-        ) : (
-          <Empty msg="accumulating OI history…" />
-        )}
-        {oiBuilding && (
-          <p className="mt-1 text-[10px] text-[var(--color-muted)]">
-            building history — {Math.max(1, Math.round(oiExtentSec / 3600))}h of snapshots so far
+          <p className="mt-2 font-mono text-[10px] text-[var(--color-muted)]">
+            Building history — {volDays} day{volDays === 1 ? "" : "s"} so far
           </p>
         )}
       </div>
 
-      <p className="text-[10px] text-[var(--color-muted)]">
-        volume: {data?.sources.dailyVolume}. OI: {data?.sources.oi}. cross-check:{" "}
-        {data?.sources.defiLlamaCrossCheck}.
+      {/* OI by class chart */}
+      <div className="mb-3 rounded-lg border border-[var(--color-line)] bg-[var(--color-panel)] p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-fg)]">
+            Open Interest by Asset Class
+            <span className="ml-2 font-normal normal-case tracking-normal text-[var(--color-muted)]">
+              · our snapshots
+            </span>
+          </h3>
+          <div className="flex gap-1.5">
+            <Toggle on={rwaOnly} onClick={() => setRwaOnly((v) => !v)}>
+              RWA only
+            </Toggle>
+          </div>
+        </div>
+        <Legend
+          keys={CLASS_ORDER.filter((k) => !(rwaOnly && k === "crypto"))}
+          colors={CLASS_COLOR}
+          active={oiSeries.map((s) => s.id.replace("oi-", ""))}
+        />
+        {oiSeries.length ? (
+          <InteractiveChart
+            series={oiSeries}
+            fitKey={`oi|${rwaOnly}|${oiTimeAxis}`}
+            timeAxis={oiTimeAxis}
+            height={220}
+            showLegend={false}
+            interactive={false}
+          />
+        ) : (
+          <Empty msg="Accumulating OI history…" />
+        )}
+        {oiBuilding && (
+          <p className="mt-2 font-mono text-[10px] text-[var(--color-muted)]">
+            Building history —{" "}
+            {Math.max(1, Math.round(oiExtentSec / 3600))}h of snapshots so far
+          </p>
+        )}
+      </div>
+
+      <p className="font-mono text-[10px] text-[var(--color-subtle)]">
+        Volume: {data?.sources.dailyVolume}. OI: {data?.sources.oi}.
       </p>
     </section>
   );
 }
 
-function Stat({ label, value, sub, dod }: { label: string; value: string; sub: string; dod: number | null }) {
+function Stat({
+  label,
+  value,
+  sub,
+  dod,
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  dod: number | null;
+}) {
+  const isUp = dod !== null && dod >= 0;
   return (
-    <div className="border border-[var(--color-line)] p-2">
-      <p className="text-[10px] uppercase tracking-wide text-[var(--color-muted)]">{label}</p>
-      <p className="text-base font-bold tabular-nums text-[var(--color-fg)]">{value}</p>
-      <p className="text-[10px] text-[var(--color-muted)]">
-        {sub}
+    <div className="rounded-lg border border-[var(--color-line)] bg-[var(--color-panel)] p-4">
+      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[var(--color-muted)]">
+        {label}
+      </p>
+      <p className="font-mono text-xl font-bold tabular-nums text-[var(--color-fg)]">
+        {value}
+      </p>
+      <div className="mt-1 flex items-center gap-1.5">
+        <span className="text-[11px] text-[var(--color-subtle)]">{sub}</span>
         {dod !== null && (
-          <span className={dod >= 0 ? " text-[var(--color-green)]" : " text-[var(--color-red)]"}>
-            {" "}· DoD {fmtPct(dod)}
+          <span
+            className={`font-mono text-[11px] font-medium ${
+              isUp ? "text-[var(--color-green)]" : "text-[var(--color-red)]"
+            }`}
+          >
+            {isUp ? "▲" : "▼"} {fmtPct(dod)}
           </span>
         )}
-      </p>
+      </div>
     </div>
   );
 }
 
-function Toggle({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
+function Toggle({
+  on,
+  onClick,
+  children,
+}: {
+  on: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={on}
-      className={`border px-2 py-0.5 ${
+      className={`cursor-pointer rounded-full border px-3 py-1 text-xs font-medium transition-all duration-150 ${
         on
-          ? "border-[var(--color-green)] text-[var(--color-green)]"
-          : "border-[var(--color-line)] text-[var(--color-muted)] hover:text-[var(--color-fg)]"
+          ? "border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
+          : "border-[var(--color-line)] text-[var(--color-muted)] hover:border-[var(--color-line-strong)] hover:text-[var(--color-fg)]"
       }`}
     >
       {children}
@@ -234,35 +320,66 @@ function Toggle({ on, onClick, children }: { on: boolean; onClick: () => void; c
   );
 }
 
-function Legend({ keys, colors, active }: { keys: string[]; colors: Record<string, string>; active: string[] }) {
+function Legend({
+  keys,
+  colors,
+  active,
+}: {
+  keys: string[];
+  colors: Record<string, string>;
+  active: string[];
+}) {
   const set = new Set(active);
   return (
-    <div className="mb-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px]">
-      {keys.filter((k) => set.has(k)).map((k) => (
-        <span key={k} className="inline-flex items-center gap-1">
-          <span aria-hidden style={{ background: colors[k] }} className="inline-block h-2 w-2 rounded-full" />
-          <span className="text-[var(--color-muted)]">{k}</span>
-        </span>
-      ))}
+    <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1">
+      {keys
+        .filter((k) => set.has(k))
+        .map((k) => (
+          <span key={k} className="inline-flex items-center gap-1.5">
+            <span
+              aria-hidden
+              style={{ background: colors[k] }}
+              className="inline-block h-2 w-2 rounded-full"
+            />
+            <span className="text-xs capitalize text-[var(--color-muted)]">
+              {k}
+            </span>
+          </span>
+        ))}
     </div>
   );
 }
 
-function Empty({ msg = "no data" }: { msg?: string }) {
+function Empty({ msg = "No data" }: { msg?: string }) {
   return (
-    <div className="border border-dashed border-[var(--color-line)] px-3 py-8 text-center text-xs text-[var(--color-muted)]">
+    <div className="rounded border border-dashed border-[var(--color-line)] px-4 py-10 text-center text-sm text-[var(--color-muted)]">
       {msg}
     </div>
   );
 }
 
-function SectionTitle({ n, title, desc }: { n: string; title: string; desc: string }) {
+function SectionTitle({
+  n,
+  title,
+  desc,
+}: {
+  n: string;
+  title: string;
+  desc: string;
+}) {
   return (
-    <div className="mb-3">
-      <h2 className="text-sm font-bold tracking-widest text-[var(--color-fg)]">
-        <span className="text-[var(--color-muted)]">{n} /</span> {title}
-      </h2>
-      <p className="mt-0.5 text-xs text-[var(--color-muted)]">{desc}</p>
+    <div className="mb-5">
+      <div className="mb-1.5 flex items-center gap-3">
+        <span className="font-mono text-xs font-medium text-[var(--color-accent)]">
+          {n}
+        </span>
+        <div className="h-px flex-1 bg-[var(--color-line)]" />
+        <h2 className="text-xs font-semibold uppercase tracking-widest text-[var(--color-fg)]">
+          {title}
+        </h2>
+        <div className="h-px w-6 bg-[var(--color-line)]" />
+      </div>
+      <p className="pl-8 text-xs text-[var(--color-muted)]">{desc}</p>
     </div>
   );
 }

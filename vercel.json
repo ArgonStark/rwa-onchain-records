@@ -1,0 +1,13 @@
+{
+  "crons": [
+    {
+      "path": "/api/snapshot",
+      "schedule": "*/15 * * * *"
+    }
+  ],
+  "functions": {
+    "app/api/snapshot/route.ts": { "maxDuration": 60 },
+    "app/api/seed/route.ts":     { "maxDuration": 300 },
+    "app/api/issuance/route.ts": { "maxDuration": 60 }
+  }
+}

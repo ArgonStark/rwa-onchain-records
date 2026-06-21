@@ -17,14 +17,14 @@ import {
 } from "lightweight-charts";
 import { compactUsd } from "@/lib/format";
 
-// Terminal palette (canvas needs concrete colors, not CSS vars — mirrors globals.css).
+// Professional dark palette (canvas needs concrete colors — mirrors globals.css @theme).
 const THEME = {
-  bg: "#07090a",
-  text: "#c9d4cf",
-  muted: "#6b7a74",
-  grid: "rgba(28,35,38,0.5)",
-  crosshair: "#5b6a64",
-  label: "#11171a",
+  bg:        "#0F172A", // --color-bg
+  text:      "#F1F5F9", // --color-fg
+  muted:     "#94A3B8", // --color-muted
+  grid:      "rgba(51,65,85,0.4)", // --color-line with alpha
+  crosshair: "#475569", // --color-line-strong
+  label:     "#1E293B", // --color-panel (crosshair label bg)
 };
 
 // #rrggbb -> rgba() with alpha, for area-fill gradients derived from a line color.
@@ -165,7 +165,7 @@ export function InteractiveChart({
       layout: {
         background: { color: THEME.bg },
         textColor: THEME.muted,
-        fontFamily: "ui-monospace, Menlo, Consolas, monospace",
+        fontFamily: "'JetBrains Mono', ui-monospace, Menlo, monospace",
         fontSize: 10,
         attributionLogo: false,
         panes: { separatorColor: THEME.grid, separatorHoverColor: THEME.crosshair },
@@ -206,10 +206,22 @@ export function InteractiveChart({
         fixLeftEdge: !interactive,
         fixRightEdge: !interactive,
         lockVisibleTimeRangeOnResize: true,
-        // Consistent ticks: HH:MM intraday vs MMM DD multi-day (reads the ref so
-        // a range change re-renders with the right style).
-        tickMarkFormatter: (t: Time) =>
-          (timeAxisRef.current === "intraday" ? fmtIntraday : fmtDaily)(t as number),
+        // Deduplicate day-mode tick labels: multiple snapshots on the same
+        // calendar day each trigger a tick, so we suppress repeat labels by
+        // tracking the last label rendered left-to-right within one pass.
+        tickMarkFormatter: (() => {
+          let lastLabel = "";
+          return (t: Time) => {
+            if (timeAxisRef.current === "intraday") {
+              lastLabel = "";
+              return fmtIntraday(t as number);
+            }
+            const label = fmtDaily(t as number);
+            if (label === lastLabel) return "";
+            lastLabel = label;
+            return label;
+          };
+        })(),
       },
       handleScroll: interactive
         ? { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false }
@@ -489,7 +501,7 @@ export function InteractiveChart({
       <div ref={containerRef} className="h-full w-full" />
       <div
         ref={tooltipRef}
-        className="pointer-events-none absolute z-10 hidden border border-[var(--color-line)] bg-[var(--color-bg)]/95 px-2 py-1 text-[10px] tabular-nums"
+        className="pointer-events-none absolute z-10 hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-panel)]/95 px-3 py-2 font-mono text-[10px] tabular-nums shadow-xl backdrop-blur-sm"
         style={{ display: "none" }}
       />
     </div>

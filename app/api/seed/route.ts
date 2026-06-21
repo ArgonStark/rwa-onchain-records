@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { hasDatabase } from "@/lib/db";
 import { seedDailyVolume } from "@/lib/dailyVolume";
-import { backfillSnapshotCategory } from "@/lib/aggregates";
+import { backfillSnapshotCategory, fixOstiumOiDoubleCount } from "@/lib/aggregates";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -30,7 +30,10 @@ export async function POST(req: Request) {
     const result = await seedDailyVolume(daysBack);
     // backfill category onto historical snapshot rows for OI-by-class history
     const categorized = await backfillSnapshotCategory();
-    return NextResponse.json({ daysBack, ...result, snapshotRowsCategorized: categorized });
+    // one-time correction: fix Ostium OI double-count (both sides → single-sided)
+    // pass the current time so only pre-fix rows are touched; harmless if already applied
+    const ostiumOiFixed = await fixOstiumOiDoubleCount(new Date());
+    return NextResponse.json({ daysBack, ...result, snapshotRowsCategorized: categorized, ostiumOiFixed });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : String(e) },

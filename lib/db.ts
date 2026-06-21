@@ -45,8 +45,11 @@ CREATE TABLE IF NOT EXISTS token_snapshots (
   ts       TIMESTAMPTZ NOT NULL DEFAULT now(),
   token_px DOUBLE PRECISION,
   ref_px   DOUBLE PRECISION,
-  premium  DOUBLE PRECISION
+  premium  DOUBLE PRECISION,
+  supply   DOUBLE PRECISION  -- circulating/total supply in token units (Phase 4)
 );
+-- Phase 4 migration: add supply column to pre-existing tables
+ALTER TABLE token_snapshots ADD COLUMN IF NOT EXISTS supply DOUBLE PRECISION;
 CREATE INDEX IF NOT EXISTS idx_token_snap_lookup
   ON token_snapshots (ticker, ts DESC);
 

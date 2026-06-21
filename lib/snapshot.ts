@@ -26,22 +26,24 @@ export async function takeSnapshot(): Promise<SnapshotResult> {
     aggregateTokens(),
   ]);
 
-  // A snapshot is a coherent cross-venue OI slice. If a normally-live venue
-  // failed, the totals would be partial and poison the aggregate time-series (a
-  // fake dip to ~0). Skip the whole perp write rather than store a misleading
-  // slice — a gap is honest; a partial total is not. A "pending" venue (no
-  // public API yet, e.g. Variational) is EXPECTED to be empty and must not block
-  // the snapshot.
-  const downVenues = perps.venues.filter(
-    (v) => v.status === "error" || (v.status === "ok" && v.count === 0),
+  // Core venues carry the bulk of RWA OI history; a failed core venue would
+  // produce a misleading dip to ~0 in the time-series, so we skip the whole
+  // write if any of them is down — a gap is honest, a partial total is not.
+  // Supplemental venues (Lighter, Aster, Variational) are non-blocking: their
+  // markets are included when up and silently omitted when down, so a transient
+  // API failure on Aster doesn't forfeit the entire snapshot.
+  const CORE_VENUES = new Set(["Hyperliquid", "Hyperliquid HIP-3", "Ostium", "dYdX"]);
+  const coreDown = perps.venues.filter(
+    (v) => CORE_VENUES.has(v.venue) &&
+           (v.status === "error" || (v.status === "ok" && v.count === 0)),
   );
-  if (downVenues.length > 0) {
+  if (coreDown.length > 0) {
     return {
       ts: ts.toISOString(),
       perpRows: 0,
       tokenRows: 0,
       dailyRollupRows: 0,
-      skipped: `partial capture — venue(s) down: ${downVenues.map((v) => v.venue).join(", ")}`,
+      skipped: `core venue(s) down: ${coreDown.map((v) => v.venue).join(", ")}`,
       venues: perps.venues.map((v) => ({ venue: v.venue, status: v.status, count: v.count })),
     };
   }
@@ -77,12 +79,12 @@ export async function takeSnapshot(): Promise<SnapshotResult> {
   if (tokens.tokens.length > 0) {
     const values: unknown[] = [];
     const tuples = tokens.tokens.map((t, i) => {
-      const b = i * 5;
-      values.push(t.symbol, ts, t.tokenUsdPrice, t.realSpotPrice, t.premium);
-      return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5})`;
+      const b = i * 6;
+      values.push(t.symbol, ts, t.tokenUsdPrice, t.realSpotPrice, t.premium, t.supply ?? null);
+      return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6})`;
     });
     const res = await pool.query(
-      `INSERT INTO token_snapshots (ticker, ts, token_px, ref_px, premium)
+      `INSERT INTO token_snapshots (ticker, ts, token_px, ref_px, premium, supply)
        VALUES ${tuples.join(",")}`,
       values,
     );

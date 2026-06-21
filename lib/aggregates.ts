@@ -132,7 +132,7 @@ export async function getHeaderStats(): Promise<HeaderStats> {
 
   const now = await totalsAt(latestTs);
 
-  // closest snapshot ~24h before latest (for day-over-day)
+  // OI DoD: compare latest snapshot to the closest one ~24h before.
   const prevTsRes = await pool.query(
     `SELECT ts FROM perp_snapshots
       WHERE ts <= $1::timestamptz - interval '24 hours'
@@ -141,11 +141,29 @@ export async function getHeaderStats(): Promise<HeaderStats> {
   );
   const prevTs = prevTsRes.rows[0]?.ts as string | undefined;
   let oiDodPct: number | null = null;
-  let volDodPct: number | null = null;
   if (prevTs) {
     const prev = await totalsAt(prevTs);
     if (prev.oi > 0) oiDodPct = (now.oi - prev.oi) / prev.oi;
-    if (prev.vol > 0) volDodPct = (now.vol - prev.vol) / prev.vol;
+  }
+
+  // Vol DoD: compare last two COMPLETE calendar days from daily_volume.
+  // perp_snapshots.vol24h is a rolling window that shifts between snapshots,
+  // making a 24h-apart comparison noisy. daily_volume holds stable calendar-day
+  // totals and is the correct source for a day-over-day change.
+  let volDodPct: number | null = null;
+  // Fetch the last two complete days (any day before today) in descending order.
+  const completeDaysRes = await pool.query(
+    `SELECT day, sum(notional_usd) AS vol
+     FROM daily_volume
+     WHERE day < CURRENT_DATE
+     GROUP BY day
+     ORDER BY day DESC
+     LIMIT 2`,
+  );
+  if (completeDaysRes.rows.length === 2) {
+    const d0 = Number(completeDaysRes.rows[0]!.vol); // more recent day
+    const d1 = Number(completeDaysRes.rows[1]!.vol); // day before
+    if (d1 > 0) volDodPct = (d0 - d1) / d1;
   }
 
   return {
@@ -157,6 +175,24 @@ export async function getHeaderStats(): Promise<HeaderStats> {
     oiDodPct,
     volDodPct,
   };
+}
+
+/**
+ * One-time correction: historical Ostium snapshots stored (longOI + shortOI) * price
+ * (both sides) instead of the single-sided convention used by every other venue.
+ * Divides all existing Ostium oi_usd rows by 2, but only those taken before the
+ * supplied cutoff timestamp (so rows written after the code fix are untouched).
+ * Safe to skip if rowCount is 0 (already corrected or no Ostium history yet).
+ */
+export async function fixOstiumOiDoubleCount(beforeTs: Date): Promise<number> {
+  if (!hasDatabase()) return 0;
+  const res = await getPool().query(
+    `UPDATE perp_snapshots
+        SET oi_usd = oi_usd / 2
+      WHERE venue = 'Ostium' AND oi_usd IS NOT NULL AND ts < $1`,
+    [beforeTs],
+  );
+  return res.rowCount ?? 0;
 }
 
 /**

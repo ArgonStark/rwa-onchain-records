@@ -70,6 +70,7 @@ export interface SpotTokenRow extends SpotToken {
   priceSource: string | null; // attribution for tokenUsdPrice
   spotSource: string | null; // attribution for realSpotPrice
   marketOpen: boolean | null; // for equities: meaningful only around market hours
+  supply: number | null; // circulating supply in token units (Phase 4)
   note?: string;
 }
 

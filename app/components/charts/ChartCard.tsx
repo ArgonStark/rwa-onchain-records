@@ -23,18 +23,30 @@ export function ChartCard({
   source?: ReactNode;
 }) {
   return (
-    <div className="mb-6 border border-[var(--color-line)] p-3">
+    <div className="mb-5 rounded-lg border border-[var(--color-line)] bg-[var(--color-panel)] p-4">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-xs font-bold tracking-wide text-[var(--color-fg)]">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-fg)]">
           {title}
-          {badge && <span className="ml-1 text-[var(--color-muted)]">· {badge}</span>}
+          {badge && (
+            <span className="ml-2 font-normal normal-case tracking-normal text-[var(--color-muted)]">
+              · {badge}
+            </span>
+          )}
         </h3>
         {right && <div className="flex flex-wrap gap-1.5 text-xs">{right}</div>}
       </div>
-      {desc && <p className="mb-2 text-[11px] leading-snug text-[var(--color-muted)]">{desc}</p>}
+      {desc && (
+        <p className="mb-3 text-xs leading-relaxed text-[var(--color-muted)]">{desc}</p>
+      )}
       {children}
-      {caption && <p className="mt-1 text-[10px] leading-snug text-[var(--color-muted)]">{caption}</p>}
-      {source && <p className="mt-1 text-[10px] text-[var(--color-muted)]">{source}</p>}
+      {caption && (
+        <p className="mt-2 font-mono text-[10px] leading-snug text-[var(--color-muted)]">
+          {caption}
+        </p>
+      )}
+      {source && (
+        <p className="mt-1 font-mono text-[10px] text-[var(--color-subtle)]">{source}</p>
+      )}
     </div>
   );
 }
@@ -53,10 +65,10 @@ export function CardToggle({
       type="button"
       onClick={onClick}
       aria-pressed={on}
-      className={`border px-2 py-0.5 ${
+      className={`cursor-pointer rounded-full border px-3 py-1 text-xs font-medium transition-all duration-150 ${
         on
-          ? "border-[var(--color-green)] text-[var(--color-green)]"
-          : "border-[var(--color-line)] text-[var(--color-muted)] hover:text-[var(--color-fg)]"
+          ? "border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
+          : "border-[var(--color-line)] text-[var(--color-muted)] hover:border-[var(--color-line-strong)] hover:text-[var(--color-fg)]"
       }`}
     >
       {children}
@@ -64,9 +76,9 @@ export function CardToggle({
   );
 }
 
-export function CardEmpty({ msg = "no data yet" }: { msg?: string }) {
+export function CardEmpty({ msg = "No data yet" }: { msg?: string }) {
   return (
-    <div className="border border-dashed border-[var(--color-line)] px-3 py-10 text-center text-xs text-[var(--color-muted)]">
+    <div className="rounded border border-dashed border-[var(--color-line)] px-4 py-10 text-center text-sm text-[var(--color-muted)]">
       {msg}
     </div>
   );

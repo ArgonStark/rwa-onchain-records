@@ -35,6 +35,17 @@ interface Option {
   venueCount: number;
 }
 
+const SHORT_VENUE: Record<string, string> = {
+  "Hyperliquid HIP-3": "HIP-3",
+  Hyperliquid: "HL",
+  Variational: "Var.",
+};
+const shortLabel = (raw: string): string => {
+  const [venue, sym] = raw.split("·");
+  const short = SHORT_VENUE[venue ?? ""] ?? venue ?? raw;
+  return sym ? `${short} ${sym}` : short;
+};
+
 export function SameAssetPanel() {
   const [options, setOptions] = useState<Option[]>([]);
   const [asset, setAsset] = useState<string>("gold");
@@ -94,15 +105,20 @@ export function SameAssetPanel() {
   const distinctVenues = useMemo(() => new Set(venues.map((v) => v.venue)).size, [venues]);
 
   return (
-    <section className="mb-10">
-      <div className="mb-3">
-        <h2 className="text-sm font-bold tracking-widest text-[var(--color-fg)]">
-          <span className="text-[var(--color-muted)]">03 /</span> SAME ASSET, EVERY VENUE
-        </h2>
-        <p className="mt-0.5 text-xs text-[var(--color-muted)]">
+    <section className="mb-12">
+      <div className="mb-5">
+        <div className="mb-1.5 flex items-center gap-3">
+          <span className="font-mono text-xs font-medium text-[var(--color-accent)]">03</span>
+          <div className="h-px flex-1 bg-[var(--color-line)]" />
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-[var(--color-fg)]">
+            Same Asset, Every Venue
+          </h2>
+          <div className="h-px w-6 bg-[var(--color-line)]" />
+        </div>
+        <p className="pl-8 text-xs text-[var(--color-muted)]">
           One underlying compared across the venues that list it — OI, funding, and mark price
-          side by side. Symbols are unified across venues (gold = XAU/GOLD/PAXG, etc.).
-          <span className="text-[var(--color-amber)]"> Nobody else aggregates this.</span>
+          side by side. Symbols are unified across venues (gold = XAU/GOLD/PAXG, etc.).{" "}
+          <span className="text-[var(--color-amber)]">Nobody else aggregates this.</span>
         </p>
       </div>
 
@@ -114,7 +130,7 @@ export function SameAssetPanel() {
             <select
               value={asset}
               onChange={(e) => setAsset(e.target.value)}
-              className="border border-[var(--color-line)] bg-[var(--color-panel)] px-2 py-0.5 text-xs text-[var(--color-fg)]"
+              className="cursor-pointer rounded-lg border border-[var(--color-line)] bg-[var(--color-panel)] px-3 py-1 text-xs text-[var(--color-fg)] transition-colors duration-150 hover:border-[var(--color-line-strong)] focus:border-[var(--color-accent)] focus:outline-none"
               aria-label="select asset"
             >
               {options.map((o) => (
@@ -132,7 +148,7 @@ export function SameAssetPanel() {
             ? `${venues.length} listing${venues.length === 1 ? "" : "s"} across ${distinctVenues} venue${distinctVenues === 1 ? "" : "s"} (a venue may list it under two symbols, e.g. XAU + PAXG). funding/mark omitted where a venue doesn't expose them.`
             : undefined
         }
-        source={data?.asOf ? `source: EWA perp_snapshots · as of ${new Date(data.asOf).toLocaleString("en-US", { hour12: false })}` : undefined}
+        source={data?.asOf ? `source: RWA perp_snapshots · as of ${new Date(data.asOf).toLocaleString("en-US", { hour12: false })}` : undefined}
       >
         {!data ? (
           <CardEmpty msg="loading…" />
@@ -152,12 +168,12 @@ export function SameAssetPanel() {
               indexBy="venue"
               groupMode="grouped"
               theme={nivoTheme}
-              colors={({ id }) => (id === "OI" ? "#46e39b" : "#f5b13d")}
+              colors={({ id }) => (id === "OI" ? "#34D399" : "#FBBF24")}
               valueFormat={(v) => compactUsd(v)}
-              margin={{ top: 8, right: 8, bottom: 64, left: 56 }}
+              margin={{ top: 8, right: 8, bottom: 72, left: 56 }}
               padding={0.25}
               innerPadding={2}
-              axisBottom={{ tickRotation: -30 }}
+              axisBottom={{ tickRotation: -30, format: shortLabel }}
               axisLeft={{ format: (v: number) => compactUsd(v) }}
               enableLabel={false}
               animate={!reducedMotion()}
@@ -168,9 +184,9 @@ export function SameAssetPanel() {
                 </Tip>
               )}
             />
-            <div className="mt-1 flex gap-3 text-[10px] text-[var(--color-muted)]">
-              <span><span className="mr-1 inline-block h-2 w-2 rounded-full" style={{ background: "#46e39b" }} />OI</span>
-              <span><span className="mr-1 inline-block h-2 w-2 rounded-full" style={{ background: "#f5b13d" }} />24h vol</span>
+            <div className="mt-2 flex gap-4 font-mono text-[10px] text-[var(--color-muted)]">
+              <span><span className="mr-1.5 inline-block h-2 w-2 rounded-full" style={{ background: "#34D399" }} />OI</span>
+              <span><span className="mr-1.5 inline-block h-2 w-2 rounded-full" style={{ background: "#FBBF24" }} />24h vol</span>
             </div>
           </div>
         )}
@@ -191,10 +207,10 @@ function MiniBar({
   signed?: boolean;
 }) {
   return (
-    <div className="border border-[var(--color-line)] p-2">
-      <p className="mb-1 text-[10px] uppercase tracking-wide text-[var(--color-muted)]">{title}</p>
+    <div className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)]/40 p-3">
+      <p className="mb-2 font-mono text-[10px] uppercase tracking-wide text-[var(--color-muted)]">{title}</p>
       {data.length === 0 ? (
-        <div className="px-2 py-8 text-center text-[10px] text-[var(--color-muted)]">not exposed</div>
+        <div className="px-2 py-8 text-center font-mono text-xs text-[var(--color-muted)]">Not exposed</div>
       ) : (
         <div style={{ height: 200 }}>
           <ResponsiveBar
@@ -204,9 +220,9 @@ function MiniBar({
             theme={nivoTheme}
             colors={(d) => venueColor(String(d.indexValue).split("·")[0]!)}
             valueFormat={fmt}
-            margin={{ top: 6, right: 6, bottom: 58, left: 50 }}
+            margin={{ top: 6, right: 6, bottom: 68, left: 50 }}
             padding={0.3}
-            axisBottom={{ tickRotation: -40 }}
+            axisBottom={{ tickRotation: -40, format: shortLabel }}
             axisLeft={{ format: (v: number) => fmt(Number(v)), tickValues: 4 }}
             enableLabel={false}
             valueScale={signed ? { type: "linear" } : { type: "linear", min: 0 }}
@@ -226,7 +242,7 @@ function MiniBar({
 
 function Tip({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ background: PANEL_BG, border: `1px solid ${LINE_COLOR}`, padding: "6px 8px", fontSize: 11, color: "#c9d4cf" }}>
+    <div style={{ background: PANEL_BG, border: `1px solid ${LINE_COLOR}`, borderRadius: 8, padding: "8px 12px", fontSize: 11, color: "#F1F5F9", boxShadow: "0 8px 32px rgba(0,0,0,0.5)", fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>
       {children}
     </div>
   );

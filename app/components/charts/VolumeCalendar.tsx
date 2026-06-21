@@ -47,7 +47,7 @@ function parse(hex: string): [number, number, number] {
 }
 
 function colorFor(sel: Sel): string {
-  if (sel === "rwa" || sel === "total") return "#46e39b";
+  if (sel === "rwa" || sel === "total") return "#34D399";
   return classColor(sel);
 }
 
@@ -89,7 +89,7 @@ export function VolumeCalendar() {
         <select
           value={sel}
           onChange={(e) => setSel(e.target.value as Sel)}
-          className="border border-[var(--color-line)] bg-[var(--color-panel)] px-2 py-0.5 text-xs text-[var(--color-fg)]"
+          className="cursor-pointer rounded-lg border border-[var(--color-line)] bg-[var(--color-panel)] px-3 py-1 text-xs text-[var(--color-fg)] transition-colors duration-150 hover:border-[var(--color-line-strong)] focus:border-[var(--color-accent)] focus:outline-none"
           aria-label="select asset class"
         >
           {SELECTS.map((s) => (
@@ -102,7 +102,7 @@ export function VolumeCalendar() {
           ? "Weekend dip is real: RWA notional falls Sat/Sun because the underlying TradFi markets are closed — a weekly rhythm crypto doesn't have."
           : "Crypto trades 24/7 — no weekend dip, unlike the RWA classes."
       }
-      source={data ? `source: EWA daily_volume · ${data.from ?? "—"} → ${data.to ?? "—"}` : undefined}
+      source={data ? `source: RWA daily_volume · ${data.from ?? "—"} → ${data.to ?? "—"}` : undefined}
     >
       {!data ? (
         <CardEmpty msg="loading…" />

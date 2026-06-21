@@ -32,11 +32,8 @@ export async function GET(req: Request) {
     dailyByVenue: byVenue,
     oiByClass,
     sources: {
-      dailyVolume: "EWA daily_volume (dYdX/Ostium exact, HL/HIP-3 ≈base×close)",
-      oi: "EWA perp_snapshots",
-      // DefiLlama derivatives volume is paid-only (HTTP 402) as of 2026 — no free
-      // cross-check; we rely on each venue's own authoritative daily source.
-      defiLlamaCrossCheck: "unavailable (DefiLlama derivatives API returns 402)",
+      dailyVolume: "RWA daily_volume (dYdX/Ostium exact, HL/HIP-3 ≈base×close)",
+      oi: "RWA perp_snapshots",
     },
   });
 }

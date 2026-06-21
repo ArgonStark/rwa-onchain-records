@@ -5,7 +5,16 @@ interface CoinGeckoPrice {
   usd: number;
 }
 
-/** CoinGecko simple price by id (gold tokens). Returns id -> USD. */
+export interface CoinGeckoData {
+  priceUsd: number;
+  circulatingSupply: number | null;
+}
+
+/**
+ * CoinGecko market data by id (gold tokens). Returns id -> { priceUsd, circulatingSupply }.
+ * Uses /coins/{id} with market_data=true to get both price and supply in one call.
+ * Falls back to simple/price if the coins endpoint is rate-limited.
+ */
 export async function fetchCoinGeckoPrices(
   ids: string[],
 ): Promise<Map<string, number>> {
@@ -21,6 +30,29 @@ export async function fetchCoinGeckoPrices(
     if (typeof v?.usd === "number") out.set(id, v.usd);
   }
   return out;
+}
+
+/** CoinGecko price + circulating supply for a single coin id. */
+export async function fetchCoinGeckoMarketData(id: string): Promise<CoinGeckoData | null> {
+  try {
+    const res = await fetch(
+      `https://api.coingecko.com/api/v3/coins/${id}?market_data=true&localization=false&tickers=false&community_data=false&developer_data=false`,
+      { cache: "no-store" },
+    );
+    if (!res.ok) return null;
+    const j = (await res.json()) as {
+      market_data?: { current_price?: { usd?: number }; circulating_supply?: number };
+    };
+    const md = j.market_data;
+    const price = md?.current_price?.usd;
+    if (typeof price !== "number") return null;
+    return {
+      priceUsd: price,
+      circulatingSupply: typeof md?.circulating_supply === "number" ? md.circulating_supply : null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 /** Real XAU spot (USD/troy oz) from gold-api.com (free, no key). */
@@ -39,11 +71,14 @@ export interface JupiterPrice {
   tokenUsd: number;
   /** Underlying equity price in USD (real off-chain share price; see audit). */
   underlyingUsd: number | null;
+  /** Circulating supply in token units (from scaledUiConfig.circSupplyPrescaled). */
+  circulatingSupply: number | null;
 }
 
 interface JupV3Entry {
   usdPrice?: number;
   stockData?: { price?: number };
+  scaledUiConfig?: { circSupplyPrescaled?: number };
 }
 
 /**
@@ -72,9 +107,11 @@ export async function fetchJupiterPrices(
   for (const [mint, v] of Object.entries(json)) {
     if (typeof v?.usdPrice !== "number") continue;
     const underlying = v.stockData?.price;
+    const circSupply = v.scaledUiConfig?.circSupplyPrescaled;
     out.set(mint, {
       tokenUsd: v.usdPrice,
       underlyingUsd: typeof underlying === "number" ? underlying : null,
+      circulatingSupply: typeof circSupply === "number" ? circSupply : null,
     });
   }
   return out;

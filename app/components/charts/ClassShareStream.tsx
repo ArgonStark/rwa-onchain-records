@@ -106,7 +106,7 @@ export function ClassShareStream() {
         </>
       }
       caption={`x = successive snapshots (not linear time); spacing is by snapshot, gaps omitted. coverage ${coverage}, ${streamData.length} snapshots.`}
-      source="source: EWA perp_snapshots"
+      source="source: RWA perp_snapshots"
     >
       <ChartLegend items={keys.map((k) => ({ label: k, color: CLASS_COLOR[k] ?? "#c9d4cf" }))} />
       {!data ? (

@@ -146,7 +146,7 @@ export function OiTreemap() {
       caption={`top ${CAP_PER_GROUP} markets per venue+class shown; the rest folded into "+N more". ${
         data?.asOf ? `as of ${new Date(data.asOf).toLocaleString("en-US", { hour12: false })}` : ""
       }`}
-      source="source: EWA perp_snapshots (latest slice)"
+      source="source: RWA perp_snapshots (latest slice)"
     >
       {!data ? (
         <CardEmpty msg="loading…" />
@@ -173,7 +173,7 @@ export function OiTreemap() {
             parentLabelPosition="top"
             parentLabelTextColor={MUTED_TEXT}
             label={(node) => node.data.name}
-            labelSkipSize={26}
+            labelSkipSize={42}
             labelTextColor={{ from: "color", modifiers: [["darker", 3]] }}
             orientLabel={false}
             animate={!reducedMotion()}

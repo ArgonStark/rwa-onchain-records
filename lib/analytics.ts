@@ -189,6 +189,59 @@ export async function getVenueRank(sinceMs: number): Promise<{
   return { buckets, series };
 }
 
+// ── Phase 6. Ecosystem Leaderboard ───────────────────────────────────
+export interface LeaderboardVenue {
+  venue: string;
+  totalOiUsd: number;
+  rwaOiUsd: number;
+  totalVol24hUsd: number;
+  rwaVol24hUsd: number;
+  byClass: Partial<Record<string, { oiUsd: number; vol24hUsd: number }>>;
+}
+
+/** Per-venue OI + vol breakdown at the latest snapshot. */
+export async function getLeaderboard(): Promise<{ asOf: string | null; venues: LeaderboardVenue[] }> {
+  if (!hasDatabase()) return { asOf: null, venues: [] };
+  const pool = getPool();
+  const tsRes = await pool.query(`SELECT max(ts) AS ts FROM perp_snapshots`);
+  const asOf = tsRes.rows[0]?.ts as string | null;
+  if (!asOf) return { asOf: null, venues: [] };
+
+  const res = await pool.query(
+    `SELECT venue, category,
+            coalesce(sum(oi_usd),0) AS oi,
+            coalesce(sum(vol24h),0) AS vol
+       FROM perp_snapshots
+      WHERE ts = $1 AND category IS NOT NULL
+      GROUP BY venue, category`,
+    [asOf],
+  );
+
+  const map = new Map<string, LeaderboardVenue>();
+  for (const r of res.rows) {
+    const v = r.venue as string;
+    const cat = r.category as string;
+    const oi = Number(r.oi);
+    const vol = Number(r.vol);
+    if (!map.has(v)) {
+      map.set(v, { venue: v, totalOiUsd: 0, rwaOiUsd: 0, totalVol24hUsd: 0, rwaVol24hUsd: 0, byClass: {} });
+    }
+    const entry = map.get(v)!;
+    entry.totalOiUsd += oi;
+    entry.totalVol24hUsd += vol;
+    if (cat !== "crypto") {
+      entry.rwaOiUsd += oi;
+      entry.rwaVol24hUsd += vol;
+    }
+    if (!entry.byClass[cat]) entry.byClass[cat] = { oiUsd: 0, vol24hUsd: 0 };
+    entry.byClass[cat]!.oiUsd += oi;
+    entry.byClass[cat]!.vol24hUsd += vol;
+  }
+
+  const venues = [...map.values()].sort((a, b) => b.rwaOiUsd - a.rwaOiUsd);
+  return { asOf, venues };
+}
+
 // ── E. Same-asset across venues ───────────────────────────────────────
 export interface CanonicalAssetOption {
   key: string;
