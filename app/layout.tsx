@@ -16,10 +16,51 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://rwa-onchain-records.vercel.app";
+
+const DESCRIPTION =
+  "Cross-venue on-chain analytics for tokenized real-world assets. Track perp open interest, funding rates, spot-token premiums, and perp–spot basis across Hyperliquid, Ostium, dYdX, and more — public data only.";
+
 export const metadata: Metadata = {
-  title: "RWA Onchain Records",
-  description:
-    "On-chain analytics for tokenized real-world assets — perp OI/funding/skew and spot-token premium across public venues.",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "RWA Onchain Records",
+    template: "%s | RWA Onchain Records",
+  },
+  description: DESCRIPTION,
+  keywords: [
+    "RWA", "real world assets", "on-chain analytics", "DeFi", "perp",
+    "open interest", "funding rate", "tokenized assets", "gold", "equities",
+    "forex", "Hyperliquid", "Ostium", "dYdX", "basis", "spot premium",
+    "crypto analytics", "perp OI",
+  ],
+  authors: [{ name: "RWA Onchain Records", url: SITE_URL }],
+  creator: "@0xargonstark",
+  openGraph: {
+    type: "website",
+    url: SITE_URL,
+    siteName: "RWA Onchain Records",
+    title: "RWA Onchain Records",
+    description: DESCRIPTION,
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: "RWA Onchain Records — on-chain analytics for tokenized real-world assets",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    site: "@0xargonstark",
+    creator: "@0xargonstark",
+    title: "RWA Onchain Records",
+    description: DESCRIPTION,
+    images: ["/opengraph-image"],
+  },
+  robots: { index: true, follow: true },
   icons: { icon: "/logo.svg" },
 };
 
