@@ -115,7 +115,7 @@ export function SameAssetPanel() {
           </h2>
           <div className="h-px w-6 bg-[var(--color-line)]" />
         </div>
-        <p className="pl-8 text-xs text-[var(--color-muted)]">
+        <p className="pl-0 sm:pl-8 text-xs text-[var(--color-muted)]">
           One underlying compared across the venues that list it — OI, funding, and mark price
           side by side. Symbols are unified across venues (gold = XAU/GOLD/PAXG, etc.).{" "}
           <span className="text-[var(--color-amber)]">Nobody else aggregates this.</span>
@@ -155,13 +155,13 @@ export function SameAssetPanel() {
         ) : venues.length === 0 ? (
           <CardEmpty msg="no venues list this asset in the latest snapshot" />
         ) : view === "multiples" ? (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <MiniBar title="Open interest" data={oiData} fmt={(v) => compactUsd(v)} />
             <MiniBar title="Funding (hourly)" data={fundData} fmt={(v) => signedPct(v, 4)} signed />
             <MiniBar title="Mark price" data={markData} fmt={(v) => compactUsd(v)} />
           </div>
         ) : (
-          <div style={{ height: 300 }}>
+          <div className="h-[220px] sm:h-[280px] md:h-[300px]">
             <ResponsiveBar
               data={groupedData}
               keys={["OI", "24h vol"]}
@@ -212,7 +212,7 @@ function MiniBar({
       {data.length === 0 ? (
         <div className="px-2 py-8 text-center font-mono text-xs text-[var(--color-muted)]">Not exposed</div>
       ) : (
-        <div style={{ height: 200 }}>
+        <div className="h-[160px] sm:h-[200px]">
           <ResponsiveBar
             data={data}
             keys={["value"]}

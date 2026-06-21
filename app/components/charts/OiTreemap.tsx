@@ -153,7 +153,7 @@ export function OiTreemap() {
       ) : !hasLeaves ? (
         <CardEmpty msg={metric === "vol" ? "no 24h volume reported for this filter" : "no markets for this filter"} />
       ) : (
-        <div style={{ height: 420 }}>
+        <div className="h-[260px] sm:h-[380px] md:h-[420px]">
           <ResponsiveTreeMap
             data={tree as TreeDatum}
             identity="id"

@@ -347,16 +347,17 @@ function TokenTable({ tokens }: { tokens: SpotTokenRow[] }) {
   return (
     <div className="overflow-hidden rounded-lg border border-[var(--color-line)]">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] border-collapse text-sm">
+        {/* min-w grows at breakpoints: mobile = Token+Token$+Premium, sm adds Class+Spot$+Trade, md adds Chain */}
+        <table className="w-full min-w-[280px] sm:min-w-[520px] md:min-w-[640px] border-collapse text-sm">
           <thead>
             <tr className="border-b border-[var(--color-line)] bg-[var(--color-panel)]">
               <Th className="pl-4">Token</Th>
-              <Th>Class</Th>
-              <Th>Chain</Th>
+              <Th className="hidden sm:table-cell">Class</Th>
+              <Th className="hidden md:table-cell">Chain</Th>
               <Th className="text-right">Token $</Th>
-              <Th className="text-right">Spot $</Th>
+              <Th className="hidden sm:table-cell text-right">Spot $</Th>
               <Th className="text-right">Premium</Th>
-              <Th className="pr-4 text-right">Trade</Th>
+              <Th className="hidden sm:table-cell pr-4 text-right">Trade</Th>
             </tr>
           </thead>
           <tbody>
@@ -372,11 +373,15 @@ function TokenTable({ tokens }: { tokens: SpotTokenRow[] }) {
                   <span className="mt-0.5 block font-mono text-[10px] text-[var(--color-muted)]">
                     {t.name}
                   </span>
+                  {/* mobile: show class badge inline under name */}
+                  <span className="mt-0.5 block sm:hidden">
+                    <CategoryBadge cat={t.category} />
+                  </span>
                 </Td>
-                <Td>
+                <Td className="hidden sm:table-cell">
                   <CategoryBadge cat={t.category} />
                 </Td>
-                <Td className="font-mono text-xs text-[var(--color-muted)]">
+                <Td className="hidden md:table-cell font-mono text-xs text-[var(--color-muted)]">
                   {t.chain}
                 </Td>
                 <Td className="text-right">
@@ -389,7 +394,7 @@ function TokenTable({ tokens }: { tokens: SpotTokenRow[] }) {
                     </span>
                   )}
                 </Td>
-                <Td className="text-right">
+                <Td className="hidden sm:table-cell text-right">
                   <span className="font-mono tabular-nums text-[var(--color-fg)]">
                     {t.realSpotPrice !== null ? `$${fmtPrice(t.realSpotPrice)}` : "—"}
                   </span>
@@ -419,7 +424,7 @@ function TokenTable({ tokens }: { tokens: SpotTokenRow[] }) {
                     </span>
                   )}
                 </Td>
-                <Td className="pr-4 text-right">
+                <Td className="hidden sm:table-cell pr-4 text-right">
                   <a
                     href={t.tradeUrl}
                     target="_blank"

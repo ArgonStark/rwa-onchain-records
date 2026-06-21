@@ -19,7 +19,7 @@ export function AnalyticsPanel() {
           </h2>
           <div className="h-px w-6 bg-[var(--color-line)]" />
         </div>
-        <p className="pl-8 text-xs text-[var(--color-muted)]">
+        <p className="pl-0 sm:pl-8 text-xs text-[var(--color-muted)]">
           Original cross-venue analytics on our owned record — composition,
           share, rhythm, and venue rank. Captions flag where history is still
           thin; nothing is interpolated.

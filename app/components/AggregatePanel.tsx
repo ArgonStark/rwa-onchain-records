@@ -379,7 +379,7 @@ function SectionTitle({
         </h2>
         <div className="h-px w-6 bg-[var(--color-line)]" />
       </div>
-      <p className="pl-8 text-xs text-[var(--color-muted)]">{desc}</p>
+      <p className="pl-0 sm:pl-8 text-xs text-[var(--color-muted)]">{desc}</p>
     </div>
   );
 }

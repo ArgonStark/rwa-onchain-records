@@ -162,13 +162,13 @@ export function PerpLedger({
     <div>
       {/* controls */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <div className="relative">
+        <div className="relative flex-1 sm:flex-none">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search symbol or venue…"
             aria-label="search markets"
-            className="w-56 rounded-lg border border-[var(--color-line)] bg-[var(--color-panel)] px-3 py-1.5 font-mono text-xs text-[var(--color-fg)] placeholder:text-[var(--color-subtle)] transition-colors duration-150 focus:border-[var(--color-accent)] focus:outline-none"
+            className="w-full sm:w-56 rounded-lg border border-[var(--color-line)] bg-[var(--color-panel)] px-3 py-1.5 font-mono text-xs text-[var(--color-fg)] placeholder:text-[var(--color-subtle)] transition-colors duration-150 focus:border-[var(--color-accent)] focus:outline-none"
           />
           {search && (
             <button
@@ -213,18 +213,19 @@ export function PerpLedger({
 
       <div className="overflow-hidden rounded-lg border border-[var(--color-line)]">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] border-collapse text-sm">
+          {/* min-w grows with breakpoints: mobile shows Symbol+OI, sm adds Class/Venue/Mark/Trend, md adds Vol/Funding/Skew */}
+          <table className="w-full min-w-[240px] sm:min-w-[580px] md:min-w-[760px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-[var(--color-line)] bg-[var(--color-panel)]">
                 <SortTh label="Symbol" k="symbol" cur={sortKey} dir={sortDir} onClick={setSort} className="pl-4" />
-                <Th>Class</Th>
-                <Th>{grouped ? "Venues" : "Venue"}</Th>
-                <SortTh label="Mark" k="mark" cur={sortKey} dir={sortDir} onClick={setSort} align="right" />
+                <Th className="hidden sm:table-cell">Class</Th>
+                <Th className="hidden sm:table-cell">{grouped ? "Venues" : "Venue"}</Th>
+                <SortTh label="Mark" k="mark" cur={sortKey} dir={sortDir} onClick={setSort} align="right" className="hidden sm:table-cell" />
                 <SortTh label="OI" k="oi" cur={sortKey} dir={sortDir} onClick={setSort} align="right" />
-                <Th className="text-right">OI Trend</Th>
-                <SortTh label="24h Vol" k="vol" cur={sortKey} dir={sortDir} onClick={setSort} align="right" />
-                <SortTh label="Funding" k="funding" cur={sortKey} dir={sortDir} onClick={setSort} align="right" />
-                <SortTh label="Skew" k="skew" cur={sortKey} dir={sortDir} onClick={setSort} align="right" className="pr-4" />
+                <Th className="hidden md:table-cell text-right">OI Trend</Th>
+                <SortTh label="24h Vol" k="vol" cur={sortKey} dir={sortDir} onClick={setSort} align="right" className="hidden md:table-cell" />
+                <SortTh label="Funding" k="funding" cur={sortKey} dir={sortDir} onClick={setSort} align="right" className="hidden md:table-cell" />
+                <SortTh label="Skew" k="skew" cur={sortKey} dir={sortDir} onClick={setSort} align="right" className="hidden md:table-cell pr-4" />
               </tr>
             </thead>
             <tbody>
@@ -304,31 +305,35 @@ function GroupRows({
             {isOpen ? "▾" : "▸"}
           </span>
           {g.label}
+          {/* mobile sub-line: class + venue count (hidden on sm+ where columns exist) */}
+          <span className="mt-0.5 block font-mono text-[10px] text-[var(--color-subtle)] sm:hidden">
+            {g.venueCount} venue{g.venueCount !== 1 ? "s" : ""} · {CAT_LABEL[g.category]}
+          </span>
         </Td>
-        <Td>
+        <Td className="hidden sm:table-cell">
           <CategoryBadge cat={g.category} />
         </Td>
-        <Td>
+        <Td className="hidden sm:table-cell">
           <span className="inline-flex items-center gap-1 rounded-full border border-[var(--color-line)] bg-[var(--color-panel)] px-2 py-0.5 font-mono text-[10px] text-[var(--color-muted)]">
             {g.venueCount} venue{g.venueCount !== 1 ? "s" : ""}
           </span>
         </Td>
-        <Td className="text-right font-mono tabular-nums text-[var(--color-muted)]">
+        <Td className="hidden sm:table-cell text-right font-mono tabular-nums text-[var(--color-muted)]">
           ~{priceUsd(d.markPx)}
         </Td>
         <Td className="text-right font-mono font-semibold tabular-nums text-[var(--color-fg)]">
           {compactUsd(g.oiUsd)}
         </Td>
-        <Td className="text-right">
+        <Td className="hidden md:table-cell text-right">
           <Sparkline data={spark[`${d.venue}|${d.symbol}`]} />
         </Td>
-        <Td className="text-right font-mono tabular-nums text-[var(--color-muted)]">
+        <Td className="hidden md:table-cell text-right font-mono tabular-nums text-[var(--color-muted)]">
           {g.vol24hUsd !== null ? compactUsd(g.vol24hUsd) : "—"}
         </Td>
-        <Td className="text-right font-mono tabular-nums">
+        <Td className="hidden md:table-cell text-right font-mono tabular-nums">
           <FundingCell v={d.funding} />
         </Td>
-        <Td className="pr-4 text-right font-mono tabular-nums">
+        <Td className="hidden md:table-cell pr-4 text-right font-mono tabular-nums">
           {d.skew !== null ? <SkewCell skew={d.skew} /> : <span className="text-[var(--color-muted)]">—</span>}
         </Td>
       </tr>
@@ -380,31 +385,39 @@ function MarketRow({
         {nested ? (
           <span className="font-mono text-[var(--color-fg)]/70">{m.symbol}</span>
         ) : (
-          m.symbol
+          <>
+            {m.symbol}
+            {/* mobile sub-line: venue (hidden on sm+ where Venue column exists) */}
+            <span className="mt-0.5 block font-mono text-[10px] text-[var(--color-subtle)] sm:hidden">
+              {m.venue}
+            </span>
+          </>
         )}
       </Td>
-      <Td>{nested ? null : <CategoryBadge cat={m.category} />}</Td>
-      <Td>
+      <Td className="hidden sm:table-cell">
+        {nested ? null : <CategoryBadge cat={m.category} />}
+      </Td>
+      <Td className="hidden sm:table-cell">
         <span className="font-mono text-xs text-[var(--color-muted)]">
           {m.venue}
         </span>
       </Td>
-      <Td className="text-right font-mono tabular-nums text-[var(--color-fg)]">
+      <Td className="hidden sm:table-cell text-right font-mono tabular-nums text-[var(--color-fg)]">
         {priceUsd(m.markPx)}
       </Td>
       <Td className="text-right font-mono tabular-nums text-[var(--color-fg)]">
         {compactUsd(m.oiUsd)}
       </Td>
-      <Td className="text-right">
+      <Td className="hidden md:table-cell text-right">
         <Sparkline data={spark[`${m.venue}|${m.symbol}`]} />
       </Td>
-      <Td className="text-right font-mono tabular-nums text-[var(--color-muted)]">
+      <Td className="hidden md:table-cell text-right font-mono tabular-nums text-[var(--color-muted)]">
         {m.vol24hUsd !== null ? compactUsd(m.vol24hUsd) : "—"}
       </Td>
-      <Td className="text-right font-mono tabular-nums">
+      <Td className="hidden md:table-cell text-right font-mono tabular-nums">
         <FundingCell v={m.funding} />
       </Td>
-      <Td className="pr-4 text-right font-mono tabular-nums">
+      <Td className="hidden md:table-cell pr-4 text-right font-mono tabular-nums">
         {m.skew !== null ? <SkewCell skew={m.skew} /> : <span className="text-[var(--color-muted)]">—</span>}
       </Td>
     </tr>

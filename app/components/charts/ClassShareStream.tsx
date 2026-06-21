@@ -114,7 +114,7 @@ export function ClassShareStream() {
       ) : streamData.length < 2 ? (
         <CardEmpty msg="need ≥2 snapshots to draw a share trend — building history" />
       ) : (
-        <div style={{ height: 300 }}>
+        <div className="h-[200px] sm:h-[260px] md:h-[300px]">
           <ResponsiveStream
             data={streamData}
             keys={keys}

@@ -210,44 +210,44 @@ export function DetailChart({
     >
       <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-t-2xl border border-[var(--color-line)] bg-[var(--color-panel)] shadow-2xl sm:rounded-2xl">
         {/* Modal header */}
-        <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-t-2xl border-b border-[var(--color-line)] bg-[var(--color-panel)] px-5 py-4">
-          <div>
-            <h3 className="text-base font-semibold text-[var(--color-fg)]">
-              {symbol}
-              <span className="ml-2 text-sm font-normal text-[var(--color-muted)]">
-                @ {venue}
-              </span>
-            </h3>
-            <p className="mt-0.5 font-mono text-[10px] text-[var(--color-subtle)]">
-              Drag · scroll to zoom · hover for values
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="flex gap-1">
-              {WINDOWS.map((w) => (
-                <button
-                  key={w}
-                  type="button"
-                  onClick={() => setWindow(w)}
-                  aria-pressed={window === w}
-                  className={`cursor-pointer rounded-full border px-3 py-1 font-mono text-xs font-medium transition-all duration-150 ${
-                    window === w
-                      ? "border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
-                      : "border-[var(--color-line)] text-[var(--color-muted)] hover:border-[var(--color-line-strong)] hover:text-[var(--color-fg)]"
-                  }`}
-                >
-                  {w}
-                </button>
-              ))}
+        <div className="sticky top-0 z-10 rounded-t-2xl border-b border-[var(--color-line)] bg-[var(--color-panel)] px-4 py-3 sm:px-5 sm:py-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="truncate text-base font-semibold text-[var(--color-fg)]">
+                {symbol}
+                <span className="ml-2 text-sm font-normal text-[var(--color-muted)]">
+                  @ {venue}
+                </span>
+              </h3>
+              <p className="mt-0.5 font-mono text-[10px] text-[var(--color-subtle)]">
+                Drag · scroll to zoom · tap for values
+              </p>
             </div>
             <button
               ref={closeRef}
               type="button"
               onClick={onClose}
-              className="cursor-pointer rounded-full border border-[var(--color-line)] px-3 py-1 text-xs text-[var(--color-muted)] transition-all duration-150 hover:border-[var(--color-line-strong)] hover:text-[var(--color-fg)]"
+              className="shrink-0 cursor-pointer rounded-full border border-[var(--color-line)] px-3 py-1 text-xs text-[var(--color-muted)] transition-all duration-150 hover:border-[var(--color-line-strong)] hover:text-[var(--color-fg)]"
             >
-              ESC ✕
+              ✕
             </button>
+          </div>
+          <div className="mt-2.5 flex gap-1">
+            {WINDOWS.map((w) => (
+              <button
+                key={w}
+                type="button"
+                onClick={() => setWindow(w)}
+                aria-pressed={window === w}
+                className={`cursor-pointer rounded-full border px-3 py-1 font-mono text-xs font-medium transition-all duration-150 ${
+                  window === w
+                    ? "border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
+                    : "border-[var(--color-line)] text-[var(--color-muted)] hover:border-[var(--color-line-strong)] hover:text-[var(--color-fg)]"
+                }`}
+              >
+                {w}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -279,7 +279,7 @@ export function DetailChart({
                     timeRange={timeRange}
                     domain={domain}
                     syncId={syncId}
-                    height={250}
+                    height={200}
                   />
                 ) : (
                   <p className="py-10 text-center font-mono text-xs text-[var(--color-muted)]">
@@ -303,7 +303,7 @@ export function DetailChart({
                     timeRange={timeRange}
                     domain={domain}
                     syncId={syncId}
-                    height={150}
+                    height={130}
                   />
                 ) : (
                   <p className="py-8 text-center font-mono text-xs text-[var(--color-muted)]">
