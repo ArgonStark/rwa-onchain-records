@@ -1,7 +1,13 @@
-import { getPool, hasDatabase } from "./db";
+import { getPool, hasDatabase, ensureSchema } from "./db";
 
 // Aggregate / overall analytics from our owned tables. "RWA" view = non-crypto
 // classes (the thesis); aggregates also expose crypto for context.
+
+async function ready(): Promise<boolean> {
+  if (!hasDatabase()) return false;
+  await ensureSchema();
+  return true;
+}
 
 export interface DaySeriesPoint {
   day: string; // YYYY-MM-DD
@@ -44,7 +50,7 @@ function pivot(
 
 /** Daily notional split by asset class. */
 export async function getDailyByClass(sinceDay: string): Promise<DaySeriesPoint[]> {
-  if (!hasDatabase()) return [];
+  if (!(await ready())) return [];
   const res = await getPool().query(
     `SELECT to_char(day,'YYYY-MM-DD') AS day, category, sum(notional_usd) AS notional
        FROM daily_volume
@@ -60,7 +66,7 @@ export async function getDailyByClass(sinceDay: string): Promise<DaySeriesPoint[
 
 /** Daily notional split by venue. */
 export async function getDailyByVenue(sinceDay: string): Promise<DaySeriesPoint[]> {
-  if (!hasDatabase()) return [];
+  if (!(await ready())) return [];
   const res = await getPool().query(
     `SELECT to_char(day,'YYYY-MM-DD') AS day, venue, sum(notional_usd) AS notional
        FROM daily_volume
@@ -76,7 +82,7 @@ export async function getDailyByVenue(sinceDay: string): Promise<DaySeriesPoint[
 
 /** Open interest over time by asset class (from snapshots). */
 export async function getOiByClass(sinceMs: number): Promise<OiPoint[]> {
-  if (!hasDatabase()) return [];
+  if (!(await ready())) return [];
   const res = await getPool().query(
     `SELECT extract(epoch from ts)::bigint AS t, category, sum(oi_usd) AS oi
        FROM perp_snapshots
@@ -101,7 +107,7 @@ export async function getHeaderStats(): Promise<HeaderStats> {
     oiDodPct: null,
     volDodPct: null,
   };
-  if (!hasDatabase()) return empty;
+  if (!(await ready())) return empty;
   const pool = getPool();
 
   const latest = await pool.query(
@@ -185,7 +191,7 @@ export async function getHeaderStats(): Promise<HeaderStats> {
  * Safe to skip if rowCount is 0 (already corrected or no Ostium history yet).
  */
 export async function fixOstiumOiDoubleCount(beforeTs: Date): Promise<number> {
-  if (!hasDatabase()) return 0;
+  if (!(await ready())) return 0;
   const res = await getPool().query(
     `UPDATE perp_snapshots
         SET oi_usd = oi_usd / 2
@@ -201,7 +207,7 @@ export async function fixOstiumOiDoubleCount(beforeTs: Date): Promise<number> {
  * cover the full snapshot history.
  */
 export async function backfillSnapshotCategory(): Promise<number> {
-  if (!hasDatabase()) return 0;
+  if (!(await ready())) return 0;
   const res = await getPool().query(
     `UPDATE perp_snapshots ps
         SET category = m.category

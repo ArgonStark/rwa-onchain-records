@@ -1,10 +1,16 @@
-import { getPool, hasDatabase } from "./db";
+import { getPool, hasDatabase, ensureSchema } from "./db";
 import { canonicalFor } from "./canonicalAsset";
 import type { AssetCategory } from "./types";
 
 // Query layer for the Nivo analytical charts. All reads are from our owned
 // tables (perp_snapshots, daily_volume). Every function degrades to an empty
 // shape when the DB is unavailable so routes never crash.
+
+async function ready(): Promise<boolean> {
+  if (!hasDatabase()) return false;
+  await ensureSchema();
+  return true;
+}
 
 const CLASSES = ["equity", "commodity", "index", "forex", "crypto"] as const;
 type ClassRecord = Record<string, number>;
@@ -26,7 +32,7 @@ export interface MarketRow {
 
 /** Every market at the most recent snapshot ts (one coherent slice). */
 export async function getLatestMarkets(): Promise<{ asOf: string | null; markets: MarketRow[] }> {
-  if (!hasDatabase()) return { asOf: null, markets: [] };
+  if (!(await ready())) return { asOf: null, markets: [] };
   const pool = getPool();
   const res = await pool.query(
     `SELECT venue, symbol, category, oi_usd, vol24h, funding, mark_px
@@ -68,7 +74,7 @@ export async function getClassSeries(
   sinceMs: number,
   metric: "oi" | "vol",
 ): Promise<ClassSharePoint[]> {
-  if (!hasDatabase()) return [];
+  if (!(await ready())) return [];
   const col = metric === "vol" ? "vol24h" : "oi_usd";
   const res = await getPool().query(
     `SELECT extract(epoch from ts)::bigint AS t, category, sum(${col}) AS v
@@ -101,7 +107,7 @@ export async function getDailyCalendar(sinceDay: string): Promise<{
   to: string | null;
   days: CalendarDay[];
 }> {
-  if (!hasDatabase()) return { from: null, to: null, days: [] };
+  if (!(await ready())) return { from: null, to: null, days: [] };
   const res = await getPool().query(
     `SELECT to_char(day,'YYYY-MM-DD') AS day, category, sum(notional_usd) AS v
        FROM daily_volume
@@ -148,7 +154,7 @@ export async function getVenueRank(sinceMs: number): Promise<{
   buckets: string[];
   series: BumpSeries[];
 }> {
-  if (!hasDatabase()) return { buckets: [], series: [] };
+  if (!(await ready())) return { buckets: [], series: [] };
   // last snapshot ts per UTC day, then sum RWA OI per venue at that ts.
   const res = await getPool().query(
     `WITH last_per_day AS (
@@ -201,7 +207,7 @@ export interface LeaderboardVenue {
 
 /** Per-venue OI + vol breakdown at the latest snapshot. */
 export async function getLeaderboard(): Promise<{ asOf: string | null; venues: LeaderboardVenue[] }> {
-  if (!hasDatabase()) return { asOf: null, venues: [] };
+  if (!(await ready())) return { asOf: null, venues: [] };
   const pool = getPool();
   const tsRes = await pool.query(`SELECT max(ts) AS ts FROM perp_snapshots`);
   const asOf = tsRes.rows[0]?.ts as string | null;

@@ -1,4 +1,4 @@
-import { getPool, hasDatabase } from "./db";
+import { getPool, hasDatabase, ensureSchema } from "./db";
 import { getLatestMarkets } from "./analytics";
 
 // Phase 5 — perp-spot basis. basis = perp mark ÷ spot TOKEN price − 1, computed
@@ -54,6 +54,7 @@ export async function getBasis(): Promise<BasisResult> {
   if (!hasDatabase()) {
     return { status: "database unavailable", asOf: null, tolerancePct: PRICE_TOL, items: [] };
   }
+  await ensureSchema();
 
   // latest spot-token slice: ticker -> on-chain token price
   const tokRes = await getPool().query(

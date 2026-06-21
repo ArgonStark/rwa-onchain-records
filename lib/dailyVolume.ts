@@ -310,6 +310,7 @@ export async function getDailyVolume(
   sinceDay: string,
 ): Promise<{ day: string; notionalUsd: number; isApprox: boolean; source: string }[]> {
   if (!hasDatabase()) return [];
+  await ensureSchema();
   const res = await getPool().query(
     // to_char avoids node-postgres parsing DATE at local midnight (TZ off-by-one).
     `SELECT to_char(day, 'YYYY-MM-DD') AS day, notional_usd, is_approx, source

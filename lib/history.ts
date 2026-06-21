@@ -1,4 +1,4 @@
-import { getPool, hasDatabase } from "./db";
+import { getPool, hasDatabase, ensureSchema } from "./db";
 
 // Time-series reads. Our own snapshots are the defensible record for ALL venues
 // (especially RWA, which no public API back-fills). For Hyperliquid crypto/HIP-3
@@ -50,6 +50,7 @@ export async function getPerpSeries(
   sinceMs: number,
 ): Promise<PerpPoint[]> {
   if (!hasDatabase()) return [];
+  await ensureSchema();
   const res = await getPool().query(
     `SELECT ts, oi_usd, funding, vol24h, mark_px
        FROM perp_snapshots
@@ -72,6 +73,7 @@ export async function getTokenSeries(
   sinceMs: number,
 ): Promise<TokenPoint[]> {
   if (!hasDatabase()) return [];
+  await ensureSchema();
   const res = await getPool().query(
     `SELECT ts, token_px, ref_px, premium
        FROM token_snapshots
@@ -95,6 +97,7 @@ export async function getSparkSeries(
   sinceMs: number,
 ): Promise<Record<string, number[]>> {
   if (!hasDatabase()) return {};
+  await ensureSchema();
   const res = await getPool().query(
     `SELECT venue, symbol, oi_usd
        FROM perp_snapshots
