@@ -158,8 +158,9 @@ export async function getHeaderStats(): Promise<HeaderStats> {
   // totals and is the correct source for a day-over-day change.
   let volDodPct: number | null = null;
   // Fetch the last two complete days (any day before today) in descending order.
+  // to_char avoids node-postgres parsing DATE at local midnight (TZ off-by-one).
   const completeDaysRes = await pool.query(
-    `SELECT day, sum(notional_usd) AS vol
+    `SELECT to_char(day,'YYYY-MM-DD') AS day, sum(notional_usd) AS vol
      FROM daily_volume
      WHERE day < CURRENT_DATE
      GROUP BY day
@@ -167,9 +168,17 @@ export async function getHeaderStats(): Promise<HeaderStats> {
      LIMIT 2`,
   );
   if (completeDaysRes.rows.length === 2) {
-    const d0 = Number(completeDaysRes.rows[0]!.vol); // more recent day
-    const d1 = Number(completeDaysRes.rows[1]!.vol); // day before
-    if (d1 > 0) volDodPct = (d0 - d1) / d1;
+    const r0 = completeDaysRes.rows[0]!; // more recent day
+    const r1 = completeDaysRes.rows[1]!; // day before
+    const gapDays =
+      (Date.parse(`${r0.day}T00:00:00Z`) - Date.parse(`${r1.day}T00:00:00Z`)) /
+      86_400_000;
+    const d0 = Number(r0.vol);
+    const d1 = Number(r1.vol);
+    // Only a true day-over-day comparison when the two days are adjacent. With a
+    // gap (a missing day) the two "last complete days" are non-adjacent, and a
+    // multi-day move would be mislabeled as DoD — so we return null instead.
+    if (gapDays === 1 && d1 > 0) volDodPct = (d0 - d1) / d1;
   }
 
   return {
