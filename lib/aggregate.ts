@@ -7,6 +7,7 @@ import { getDydxPerps } from "./sources/dydx";
 import { getLighterPerps } from "./sources/lighter";
 import { getAsterPerps } from "./sources/aster";
 import { getVariationalPerps } from "./sources/variational";
+import { getOndoPerps } from "./sources/ondo";
 import { premium as premiumMetric } from "./metrics";
 import {
   fetchCoinGeckoPrices,
@@ -36,6 +37,7 @@ export async function aggregatePerps(): Promise<PerpsResponse> {
     getLighterPerps(),
     getAsterPerps(),
     getVariationalPerps(),
+    getOndoPerps(),
   ]);
 
   const venues: PerpsResponse["venues"] = [];

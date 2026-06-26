@@ -69,6 +69,7 @@ export const VENUE_COLOR: Record<string, string> = {
   Lighter:              "#2DD4BF",
   Aster:                "#FB7185",
   Variational:          "#F97316",
+  Ondo:                 "#E879F9",
 };
 
 export const CLASS_ORDER = ["equity", "commodity", "index", "forex", "crypto"];
