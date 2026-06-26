@@ -500,16 +500,20 @@ export function OiTreemap() {
         </div>
       )}
 
-      {/* screen-reader data table */}
-      <table className="sr-only">
-        <caption>{valLabel} by venue, asset class and market</caption>
-        <thead><tr><th>Venue</th><th>Class</th><th>Market</th><th>{valLabel} (USD)</th></tr></thead>
-        <tbody>
-          {venues.flatMap((v) => (v.children ?? []).flatMap((cl) => (cl.children ?? []).map((lf) => (
-            <tr key={lf.id}><td>{v.label}</td><td>{cl.label}</td><td>{lf.label}</td><td>{compactUsd(lf.value)}</td></tr>
-          ))))}
-        </tbody>
-      </table>
+      {/* screen-reader data table — wrapped in an sr-only DIV: a <table> ignores
+          the sr-only height:1px/overflow:hidden (table overflow quirk) and would
+          otherwise render full-height and balloon the page's scroll height. */}
+      <div className="sr-only">
+        <table>
+          <caption>{valLabel} by venue, asset class and market</caption>
+          <thead><tr><th>Venue</th><th>Class</th><th>Market</th><th>{valLabel} (USD)</th></tr></thead>
+          <tbody>
+            {venues.flatMap((v) => (v.children ?? []).flatMap((cl) => (cl.children ?? []).map((lf) => (
+              <tr key={lf.id}><td>{v.label}</td><td>{cl.label}</td><td>{lf.label}</td><td>{compactUsd(lf.value)}</td></tr>
+            ))))}
+          </tbody>
+        </table>
+      </div>
     </ChartCard>
   );
 }
