@@ -13,7 +13,9 @@ export function compactUsd(n: number): string {
   if (a >= 1e6) return `${sign}$${trimZeros((a / 1e6).toFixed(2))}M`;
   if (a >= 1e3) return `${sign}$${trimZeros((a / 1e3).toFixed(2))}K`;
   if (a >= 1) return `${sign}$${a.toFixed(2)}`;
-  return `${sign}$${a.toFixed(4)}`;
+  // sub-$1: trim trailing zeros so $0.3600 → $0.36 and a near-zero axis tick
+  // (e.g. 0.00001 → "0.0000") collapses to "$0" rather than "$0.0000".
+  return `${sign}$${trimZeros(a.toFixed(4))}`;
 }
 
 // Precise price for tooltips/legends (keeps cents; axis stays compact).

@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   createChart,
-  LineSeries,
   AreaSeries,
   HistogramSeries,
   CrosshairMode,
   LineStyle,
+  LineType,
+  createSeriesMarkers,
   type IChartApi,
   type ISeriesApi,
+  type ISeriesMarkersPluginApi,
   type UTCTimestamp,
   type SeriesType,
   type Time,
@@ -22,10 +24,15 @@ const THEME = {
   bg:        "#0F172A", // --color-bg
   text:      "#F1F5F9", // --color-fg
   muted:     "#94A3B8", // --color-muted
-  grid:      "rgba(51,65,85,0.4)", // --color-line with alpha
+  grid:      "rgba(51,65,85,0.4)", // --color-line with alpha (pane separators)
+  gridLine:  "rgba(51,65,85,0.22)", // fainter dashed horizontal gridlines
   crosshair: "#475569", // --color-line-strong
   label:     "#1E293B", // --color-panel (crosshair label bg)
 };
+
+// Lines are a touch thicker and curved so they read as filled areas, not bare
+// strokes. (lightweight-charts line widths are integers 1–4.)
+const LINE_W = 3 as const;
 
 // #rrggbb -> rgba() with alpha, for area-fill gradients derived from a line color.
 function rgba(hex: string, a: number): string {
@@ -142,6 +149,7 @@ export function InteractiveChart({
   const legendRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<Map<string, ISeriesApi<SeriesType>>>(new Map());
+  const markersRef = useRef<Map<string, ISeriesMarkersPluginApi<Time>>>(new Map());
   const lastFitKey = useRef<string>("");
   const specRef = useRef<ChartSeries[]>(series);
   specRef.current = series;
@@ -154,6 +162,18 @@ export function InteractiveChart({
   // True while WE are programmatically driving the crosshair from a sibling, so
   // the resulting crosshairMove doesn't render a second tooltip or echo back.
   const fromSync = useRef(false);
+
+  // Mount fade-in (reduced-motion-safe: appears instantly when reduce is set).
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { setShown(true); return; }
+    const id = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  // Thin history: fewer than 2 real points in every series → a flat dead line.
+  // Show a centered caption instead.
+  const thin = series.length > 0 && series.every((s) => s.data.length < 2);
 
   // Build chart once (rebuilt only if syncId / interactivity changes).
   useEffect(() => {
@@ -183,10 +203,10 @@ export function InteractiveChart({
             timeZone: "UTC",
           }),
       },
-      // Cleaner look: drop vertical grid lines, keep faint horizontals only.
+      // Cleaner look: no vertical gridlines; faint dashed horizontals only.
       grid: {
         vertLines: { visible: false },
-        horzLines: { color: THEME.grid },
+        horzLines: { color: THEME.gridLine, style: LineStyle.Dashed },
       },
       crosshair: {
         mode: CrosshairMode.Magnet,
@@ -356,6 +376,7 @@ export function InteractiveChart({
       if (!ids.has(id)) {
         chart.removeSeries(api);
         seriesRef.current.delete(id);
+        markersRef.current.delete(id);
       }
     }
 
@@ -377,17 +398,22 @@ export function InteractiveChart({
           if (s.overlay) {
             api.priceScale().applyOptions({ scaleMargins: { top: 0.74, bottom: 0 } });
           }
-        } else if (s.area) {
-          // Single-metric line as an area with a subtle top→bottom gradient.
+        } else {
+          // Every non-histogram series renders as an area: a subtle
+          // series-color → transparent gradient + a smooth curve, so even flat,
+          // far-apart lines (the OI-by-class chart) read as filled areas rather
+          // than bare strokes. `lastValueVisible` puts a color-coded value tag at
+          // the right edge; a marker (below) adds the matching last-point dot.
           api = chart.addSeries(
             AreaSeries,
             {
               lineColor: s.color,
-              lineWidth: 2,
-              topColor: rgba(s.color, 0.26),
-              bottomColor: rgba(s.color, 0.02),
+              lineWidth: LINE_W,
+              lineType: LineType.Curved,
+              topColor: rgba(s.color, s.area ? 0.22 : 0.13),
+              bottomColor: rgba(s.color, 0),
               priceLineVisible: false,
-              lastValueVisible: false,
+              lastValueVisible: true,
               crosshairMarkerVisible: true,
               crosshairMarkerRadius: 3,
               crosshairMarkerBorderColor: s.color,
@@ -395,21 +421,7 @@ export function InteractiveChart({
             },
             s.pane,
           );
-        } else {
-          api = chart.addSeries(
-            LineSeries,
-            {
-              color: s.color,
-              lineWidth: 2,
-              priceLineVisible: false,
-              lastValueVisible: false,
-              crosshairMarkerVisible: true,
-              crosshairMarkerRadius: 3,
-              crosshairMarkerBorderColor: s.color,
-              crosshairMarkerBackgroundColor: THEME.bg,
-            },
-            s.pane,
-          );
+          markersRef.current.set(s.id, createSeriesMarkers(api, []));
         }
         seriesRef.current.set(s.id, api);
       }
@@ -445,8 +457,21 @@ export function InteractiveChart({
         );
     };
 
+    // Persistent dot at the latest real point of each series (purely visual —
+    // independent of the hover crosshair marker).
+    const setLastMarker = (s: ChartSeries) => {
+      const mk = markersRef.current.get(s.id);
+      if (!mk || s.data.length === 0) return;
+      const last = s.data[s.data.length - 1]!;
+      try {
+        mk.setMarkers([{ time: last.time as Time, position: "inBar", color: s.color, shape: "circle", size: 1 }]);
+      } catch {
+        /* time outside bars — ignore */
+      }
+    };
+
     if (fitKey !== lastFitKey.current) {
-      for (const s of series) seriesRef.current.get(s.id)?.setData(data(s));
+      for (const s of series) { seriesRef.current.get(s.id)?.setData(data(s)); setLastMarker(s); }
       const tr = timeRangeRef.current;
       if (tr) {
         chart.timeScale().setVisibleRange({ from: tr.from as Time, to: tr.to as Time });
@@ -465,6 +490,7 @@ export function InteractiveChart({
         } catch {
           api.setData(data(s));
         }
+        setLastMarker(s);
       }
     }
 
@@ -498,7 +524,17 @@ export function InteractiveChart({
           className="pointer-events-none absolute left-1 top-1 z-10 flex flex-wrap text-[10px] tabular-nums"
         />
       )}
-      <div ref={containerRef} className="h-full w-full" />
+      <div
+        ref={containerRef}
+        className={`h-full w-full transition-opacity duration-700 ease-out ${shown ? "opacity-100" : "opacity-0"}`}
+      />
+      {thin && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <span className="rounded-full border border-[var(--color-line)] bg-[var(--color-panel)]/90 px-3 py-1 font-mono text-[11px] text-[var(--color-muted)] backdrop-blur-sm">
+            building history — collecting snapshots
+          </span>
+        </div>
+      )}
       <div
         ref={tooltipRef}
         className="pointer-events-none absolute z-10 hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-panel)]/95 px-3 py-2 font-mono text-[10px] tabular-nums shadow-xl backdrop-blur-sm"
