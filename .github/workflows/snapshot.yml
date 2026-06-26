@@ -1,0 +1,31 @@
+name: RWA snapshot
+
+# Drives the point-in-time snapshot that powers the OI-by-class and asset-class
+# share charts. Vercel's Hobby plan caps crons at once/day, so we schedule here
+# instead to build a denser time series. Auth uses the SNAPSHOT_TOKEN repo secret
+# (the same token /api/snapshot accepts).
+on:
+  schedule:
+    - cron: "*/30 * * * *" # every 30 minutes (UTC); GitHub may delay under load
+  workflow_dispatch: {} # allow manual runs from the Actions tab
+
+# A run started before the previous finishes would double-write; let the newer win.
+concurrency:
+  group: rwa-snapshot
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger /api/snapshot
+        env:
+          TOKEN: ${{ secrets.SNAPSHOT_TOKEN }}
+        run: |
+          code=$(curl -sS -X POST "https://www.rwaonchainrecords.xyz/api/snapshot" \
+            -H "authorization: Bearer ${TOKEN}" \
+            -o /tmp/resp.json -w "%{http_code}" --max-time 90)
+          echo "HTTP ${code}"
+          cat /tmp/resp.json || true
+          echo
+          test "${code}" = "200"

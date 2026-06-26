@@ -25,7 +25,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const url = new URL(req.url);
-  const daysBack = Math.min(60, Math.max(1, Number(url.searchParams.get("days")) || 14));
+  const daysBack = Math.min(60, Math.max(1, Number(url.searchParams.get("days")) || 60));
   try {
     const result = await seedDailyVolume(daysBack);
     // backfill category onto historical snapshot rows for OI-by-class history
