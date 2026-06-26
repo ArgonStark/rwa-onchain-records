@@ -115,3 +115,26 @@ midnight-to-midnight notional sum. Per-venue sources and why:
   and rejects the index-level and memecoin contracts.
 - One dot per asset = the deepest (highest-OI) in-scale perp leg. Tokens:
   PAXG/XAUT→gold, AAPLx/NVDAx/TSLAx/CRCLx→their tickers, SPYx→S&P-500 ETF scale.
+
+### Ondo Perps (lib/sources/ondo.ts) — RWA-only venue, one public endpoint
+- Public, no-key REST. We read everything from `GET
+  https://api.ondoperps.xyz/v1/perps/contracts` (one call): per market it carries
+  `lastPrice`, `indexPrice`, `openInterestUsd`, `usdVolume` (24h), `fundingRate`,
+  `nextFundingRateTimestamp`, `tags`. The split open_interest/volume/mark_prices/
+  funding_rates endpoints exist but are redundant given contracts.
+- Units (verified live 2026-06-26): lastPrice/openInterestUsd/usdVolume are USD;
+  `openInterest`/`baseVolume` are base-unit sizes (we use the *Usd fields).
+  `markPx` = lastPrice, falling back to `indexPrice` (oracle) when lastPrice is 0;
+  both 0 ⇒ pre-launch market (QQQ/SPY today), skipped.
+- Funding: `fundingRate` is the HOURLY fraction — `nextFundingRateTimestamp` and
+  funding_rates.`intervalEnds` both land on the next top-of-hour, so interval = 1h
+  and no scaling is needed (0.0000063/hr ≈ HL). Positive ⇒ longs pay shorts.
+  Every market currently shows the same baseline rate with a 0 premiumIndex on
+  every per-minute measurement — only the interest-rate term is live, premium is
+  flat 0 right now. Verified, not a bug (cf. the Ostium funding note above).
+- No long/short split → `skew = null`. Supplemental (non-core) venue: a transient
+  Ondo failure omits its rows but never voids a snapshot.
+- Classification: all 23 active symbols classify cleanly via the shared
+  classify() on `baseCurrency` — none default to crypto. Ondo tags ETFs (QQQ/SPY)
+  as "ETF"; we fold those into `index`. US500/US100 quote at INDEX LEVEL
+  (~7300/~29000), not ETF scale — the basis ±10% price-guard handles that.
