@@ -11,3 +11,4 @@ npm-debug.log*
 
 # local postgres cluster (Phase 2)
 .pgdata/
+.claude/
