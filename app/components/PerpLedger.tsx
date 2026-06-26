@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AssetCategory, PerpMarket } from "@/lib/types";
 import { canonicalFor } from "@/lib/canonicalAsset";
 import { compactUsd, priceUsd } from "@/lib/format";
@@ -46,6 +46,7 @@ interface Group {
 }
 
 const fmtPct = (n: number, d = 3) => `${(n * 100).toFixed(d)}%`;
+const PAGE = 100; // rows shown per page; "Load more" adds another PAGE
 
 function buildGroups(markets: PerpMarket[]): Group[] {
   const map = new Map<string, Group>();
@@ -120,6 +121,7 @@ export function PerpLedger({
   const [sortKey, setSortKey] = useState<SortKey>("oi");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [open, setOpen] = useState<Set<string>>(new Set());
+  const [limit, setLimit] = useState(PAGE);
 
   const q = search.trim().toLowerCase();
   const matchMarket = (m: PerpMarket) =>
@@ -156,7 +158,13 @@ export function PerpLedger({
       return next;
     });
 
+  // "Load more" window — reset to the first page when the filter or mode changes.
+  useEffect(() => { setLimit(PAGE); }, [q, grouped]);
+  const shownGroups = useMemo(() => visibleGroups.slice(0, limit), [visibleGroups, limit]);
+  const shownFlat = useMemo(() => visibleFlat.slice(0, limit), [visibleFlat, limit]);
+
   const rowCount = grouped ? visibleGroups.length : visibleFlat.length;
+  const shownCount = grouped ? shownGroups.length : shownFlat.length;
 
   return (
     <div>
@@ -241,7 +249,7 @@ export function PerpLedger({
               )}
 
               {grouped
-                ? visibleGroups.map((g) => {
+                ? shownGroups.map((g) => {
                     const isOpen = open.has(g.key);
                     return (
                       <GroupRows
@@ -254,7 +262,7 @@ export function PerpLedger({
                       />
                     );
                   })
-                : visibleFlat.map((m, i) => (
+                : shownFlat.map((m, i) => (
                     <MarketRow
                       key={`${m.venue}:${m.symbol}:${i}`}
                       m={m}
@@ -266,6 +274,21 @@ export function PerpLedger({
           </table>
         </div>
       </div>
+
+      {shownCount < rowCount && (
+        <div className="mt-3 flex flex-col items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setLimit((l) => l + PAGE)}
+            className="cursor-pointer rounded-full border border-[var(--color-line)] bg-[var(--color-panel)] px-4 py-1.5 text-xs font-medium text-[var(--color-muted)] transition-colors duration-150 hover:border-[var(--color-accent)]/40 hover:text-[var(--color-fg)]"
+          >
+            Load {Math.min(PAGE, rowCount - shownCount)} more
+          </button>
+          <span className="font-mono text-[10px] text-[var(--color-subtle)]">
+            showing {shownCount} of {rowCount} {grouped ? "assets" : "markets"}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

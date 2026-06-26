@@ -464,7 +464,7 @@ export function InteractiveChart({
       if (!mk || s.data.length === 0) return;
       const last = s.data[s.data.length - 1]!;
       try {
-        mk.setMarkers([{ time: last.time as Time, position: "inBar", color: s.color, shape: "circle", size: 1 }]);
+        mk.setMarkers([{ time: last.time as Time, position: "inBar", color: s.color, shape: "circle", size: 0.5 }]);
       } catch {
         /* time outside bars — ignore */
       }
